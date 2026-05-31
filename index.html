@@ -1226,8 +1226,6 @@ footer{background:var(--navy);padding:3rem 3.5rem;display:flex;justify-content:s
             <div class="video-play">▶</div>
             <div class="video-label">Uploaded</div>
             <div class="video-title-label">your_video.mp4</div>
-            <div class="frame-marker fm1"><div class="fm-label">Hip rotation</div></div>
-            <div class="frame-marker fm2"><div class="fm-label">Edge quality</div></div>
           </div>
           <div class="timeline">
             <div class="scrubber-track"><div class="scrubber-fill"></div><div class="scrubber-dot"></div></div>
@@ -1241,7 +1239,7 @@ footer{background:var(--navy);padding:3rem 3.5rem;display:flex;justify-content:s
         </div>
         <div class="btn-row">
           <button class="btn-secondary" onclick="resetFeedback()">Upload New Video</button>
-          <button class="btn-primary" onclick="showPage('progress')">Save to Progress 🩰</button>
+          <button class="btn-primary" onclick="saveAndGoToProgress()">Save to Progress 🩰</button>
         </div>
       </div>
 
@@ -1860,6 +1858,27 @@ function displayFeedback(data, filename) {
   if (goodEl) goodEl.textContent = goodCount;
 }
 
+async function saveAndGoToProgress() {
+  const scoreEl = document.querySelector('.score-big');
+  const score = scoreEl ? parseInt(scoreEl.textContent) : 0;
+  const titleEl = document.querySelector('.video-title-label');
+  const filename = titleEl ? titleEl.textContent : 'Session';
+  const selectedPill = document.querySelector('.epill.selected-rose, .epill.selected');
+  const element = selectedPill ? selectedPill.textContent.trim() : 'General';
+
+  if (window._glideologyUser && window.saveSession) {
+    await window.saveSession({
+      score,
+      element,
+      filename,
+      date: new Date().toISOString()
+    });
+  } else if (!window._glideologyUser) {
+    document.getElementById('auth-modal').style.display = 'flex';
+    return;
+  }
+  showPage('progress');
+}
 function resetFeedback() {
   document.getElementById('feedback-upload-state').style.display = 'block';
   document.getElementById('upload-progress').style.display = 'none';

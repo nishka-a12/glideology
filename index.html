@@ -1,0 +1,2427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Glideology — Learn the Art of Figure Skating</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Caveat:wght@400;500&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
+
+<!-- ===================== FIREBASE AUTH ===================== -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged }
+    from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+  import { getFirestore, doc, setDoc, getDoc, collection, addDoc, query, orderBy, getDocs }
+    from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+  // ↓ PASTE YOUR FIREBASE CONFIG HERE — replace every value
+  const firebaseConfig = {
+  apiKey: "AIzaSyDomD96BeaDJ53ZWFf5ouBh-AicPlrFruA",
+  authDomain: "glideology-fb9a1.firebaseapp.com",
+  projectId: "glideology-fb9a1",
+  storageBucket: "glideology-fb9a1.firebasestorage.app",
+  messagingSenderId: "508383751334",
+  appId: "1:508383751334:web:12bbad1ac0c449180f1867"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  // SIGN UP
+  window.signUp = async function() {
+    const email = document.getElementById('auth-email').value.trim();
+    const password = document.getElementById('auth-password').value;
+    const name = document.getElementById('auth-name').value.trim();
+    const errEl = document.getElementById('auth-error');
+    errEl.textContent = '';
+    if (!name) { errEl.textContent = 'Please enter your name ♡'; return; }
+    if (!email || !email.includes('@')) { errEl.textContent = 'Please enter a valid email'; return; }
+    if (password.length < 6) { errEl.textContent = 'Password must be at least 6 characters'; return; }
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      await setDoc(doc(db, 'users', cred.user.uid), {
+        name, email, level: 'Beginner', createdAt: new Date().toISOString(), sessions: 0
+      });
+      document.getElementById('auth-modal').style.display = 'none';
+      showToast('Welcome to Glideology, ' + name + '! ♡');
+    } catch(e) {
+      if (e.code === 'auth/email-already-in-use') errEl.textContent = 'This email already has an account — try logging in ♡';
+      else if (e.code === 'auth/weak-password') errEl.textContent = 'Password too weak — try something longer';
+      else errEl.textContent = e.message;
+    }
+  }
+
+  // LOG IN
+  window.logIn = async function() {
+    const email = document.getElementById('auth-email').value.trim();
+    const password = document.getElementById('auth-password').value;
+    const errEl = document.getElementById('auth-error');
+    errEl.textContent = '';
+    if (!email || !password) { errEl.textContent = 'Please fill in both fields ♡'; return; }
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      document.getElementById('auth-modal').style.display = 'none';
+      showToast('Welcome back! ♡');
+    } catch(e) {
+      if (e.code === 'auth/user-not-found' || e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential')
+        errEl.textContent = 'Incorrect email or password — try again ♡';
+      else errEl.textContent = e.message;
+    }
+  }
+
+  // LOG OUT
+  window.logOut = async function() {
+    await signOut(auth);
+    window._glideologyUser = null;
+    updateProgressPage(null, null);
+    updateMarketplace(false);
+    document.querySelector('.avatar').textContent = 'N';
+    const btn = document.getElementById('nav-auth-btn');
+    if (btn) { btn.textContent = 'Start for Free ♡'; btn.onclick = () => document.getElementById('auth-modal').style.display = 'flex'; }
+  }
+
+  // TOAST HELPER
+  window.showToast = function(msg) {
+    const t = document.getElementById('auth-success');
+    if (!t) return;
+    t.textContent = msg; t.style.display = 'block';
+    setTimeout(() => t.style.display = 'none', 3000);
+  }
+
+  // UPDATE MARKETPLACE VISIBILITY
+  function updateMarketplace(loggedIn) {
+    const wall = document.getElementById('market-login-wall');
+    const content = document.getElementById('market-content');
+    if (wall) wall.style.display = loggedIn ? 'none' : 'flex';
+    if (content) content.style.display = loggedIn ? 'block' : 'none';
+    if (loggedIn && window.loadListings) window.loadListings(db);
+  }
+
+  // UPDATE PROGRESS PAGE
+  function updateProgressPage(user, userData) {
+    const out = document.getElementById('progress-logged-out');
+    const empty = document.getElementById('progress-empty');
+    const full = document.getElementById('progress-full');
+    if (!user) {
+      if (out) out.style.display = 'flex';
+      if (empty) empty.style.display = 'none';
+      if (full) full.style.display = 'none';
+      return;
+    }
+    if (out) out.style.display = 'none';
+    const name = userData?.name || user.email.split('@')[0];
+    const sessions = userData?.sessions || 0;
+    if (sessions === 0) {
+      if (empty) empty.style.display = 'block';
+      if (full) full.style.display = 'none';
+      const nameEl = document.getElementById('prog-name');
+      const emailEl = document.getElementById('prog-email-tag');
+      if (nameEl) nameEl.textContent = name;
+      if (emailEl) emailEl.textContent = '✦ ' + user.email;
+    } else {
+      if (empty) empty.style.display = 'none';
+      if (full) full.style.display = 'block';
+      const nameEl = document.getElementById('prog-name-full');
+      const sessEl = document.getElementById('prog-sessions-tag');
+      const countEl = document.getElementById('prog-count');
+      const levelEl = document.getElementById('prog-level');
+      if (nameEl) nameEl.textContent = name;
+      if (sessEl) sessEl.textContent = '✦ ' + sessions + ' sessions logged';
+      if (countEl) countEl.textContent = sessions;
+      if (levelEl) levelEl.textContent = userData?.level || 'Beginner';
+    }
+  }
+
+  // AUTH STATE LISTENER — fires on every page load
+  onAuthStateChanged(auth, async (user) => {
+    const btn = document.getElementById('nav-auth-btn');
+    window._glideologyUser = user || null;
+    if (user) {
+      if (btn) { btn.textContent = 'Log out'; btn.onclick = window.logOut; }
+      document.querySelector('.avatar').textContent = user.email[0].toUpperCase();
+      updateMarketplace(true);
+      // Load user data from Firestore
+      try {
+        const snap = await getDoc(doc(db, 'users', user.uid));
+        const userData = snap.exists() ? snap.data() : null;
+        updateProgressPage(user, userData);
+      } catch(e) {
+        updateProgressPage(user, null);
+      }
+    } else {
+      if (btn) { btn.textContent = 'Start for Free ♡'; btn.onclick = () => document.getElementById('auth-modal').style.display = 'flex'; }
+      updateMarketplace(false);
+      updateProgressPage(null, null);
+    }
+  });
+
+  // Allow saving sessions from feedback page
+  window.saveSession = async function(sessionData) {
+    if (!window._glideologyUser) return;
+    const uid = window._glideologyUser.uid;
+    try {
+      await addDoc(collection(db, 'users', uid, 'sessions'), {
+        ...sessionData, savedAt: new Date().toISOString()
+      });
+      // increment session count
+      const userRef = doc(db, 'users', uid);
+      const snap = await getDoc(userRef);
+      const current = snap.exists() ? (snap.data().sessions || 0) : 0;
+      await setDoc(userRef, { sessions: current + 1 }, { merge: true });
+      showToast('Session saved to your progress! ♡');
+    } catch(e) { console.error('Save session error:', e); }
+  }
+</script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--blush:#F9EEF0;--blush-mid:#F2D8DE;--blush-deep:#E8B8C2;--rose:#C87A8A;--rose-dark:#9A4F5F;--navy:#1E2D4A;--navy-soft:#2D3F5C;--ice:#EAF4F8;--ice-light:#F4FAFC;--cream:#FDF8F5;--gold:#C9A96E;--gold-light:#E8D5B0;--white:#FFFFFF;--text-dark:#1E2D4A;--text-mid:#4A5F7A;--text-soft:#7A8FA8;--text-rose:#9A4F5F}
+body{font-family:'Jost',sans-serif;background:var(--cream);color:var(--text-dark);overflow-x:hidden}
+
+/* ===================== SHARED NAV ===================== */
+nav{display:flex;align-items:center;justify-content:space-between;padding:1.4rem 3.5rem;background:rgba(253,248,245,0.97);border-bottom:1px solid var(--blush-mid);position:sticky;top:0;z-index:100}
+.logo{font-family:'DM Serif Display',serif;font-size:1.6rem;color:var(--navy);display:flex;align-items:center;gap:0.5rem;text-decoration:none;cursor:pointer}
+.nav-links{display:flex;gap:2.2rem;list-style:none}
+.nav-links a{font-size:0.78rem;font-weight:400;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-mid);text-decoration:none;transition:color 0.2s;cursor:pointer}
+.nav-links a:hover{color:var(--rose)}
+.nav-links a.active{color:var(--rose);border-bottom:1.5px solid var(--rose);padding-bottom:2px}
+.nav-pill{background:var(--navy);color:var(--white);padding:0.6rem 1.5rem;border-radius:50px;font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;border:none;font-family:'Jost',sans-serif;font-weight:500;transition:background 0.2s}
+.nav-pill:hover{background:var(--rose-dark)}
+.avatar{width:34px;height:34px;border-radius:50%;background:var(--blush-mid);border:1.5px solid var(--blush-deep);display:flex;align-items:center;justify-content:center;font-size:0.8rem;color:var(--rose-dark);font-weight:500;cursor:pointer}
+
+/* ===================== PAGE SWITCHING ===================== */
+.page-view{display:none}
+.page-view.active{display:block}
+
+/* ===================== SHARED BUTTONS ===================== */
+.btn-primary{background:var(--navy);color:var(--white);padding:0.85rem 2rem;border-radius:50px;font-size:0.8rem;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;border:none;font-family:'Jost',sans-serif;font-weight:500;transition:all 0.2s}
+.btn-primary:hover{background:var(--rose-dark)}
+.btn-outline{background:transparent;color:var(--navy);padding:0.85rem 1.8rem;border-radius:50px;font-size:0.78rem;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;border:1.5px solid var(--blush-deep);font-family:'Jost',sans-serif;font-weight:400;transition:all 0.2s}
+.btn-outline:hover{border-color:var(--rose);color:var(--rose)}
+
+/* ===================== SHARED SECTION STYLES ===================== */
+.sec-label{font-family:'Caveat',cursive;font-size:1.2rem;color:var(--rose);margin-bottom:0.5rem;display:block}
+h2{font-family:'DM Serif Display',serif;font-size:2.8rem;font-weight:400;color:var(--navy);line-height:1.15;margin-bottom:1rem}
+h2 em{font-style:italic;color:var(--rose)}
+.sec-sub{font-size:0.95rem;color:var(--text-mid);line-height:1.85;max-width:520px;font-weight:300}
+.hdiv{display:flex;align-items:center;gap:0.8rem;margin:1.2rem 0;font-size:0.7rem;color:var(--blush-deep)}
+.hdiv::before,.hdiv::after{content:'';flex:1;height:1px;background:var(--blush-mid)}
+
+/* ===================== LANDING PAGE ===================== */
+#page-home{}
+.hero{min-height:95vh;background:linear-gradient(160deg,#F9EEF0 0%,#F2D8DE 25%,#EAF4F8 70%,#F4FAFC 100%);display:grid;grid-template-columns:1fr 1fr;align-items:center;padding:0 3.5rem;position:relative;overflow:hidden}
+.ice-lines{position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 58px,rgba(91,184,212,0.06) 58px,rgba(91,184,212,0.06) 59px),repeating-linear-gradient(90deg,transparent,transparent 58px,rgba(91,184,212,0.03) 58px,rgba(91,184,212,0.03) 59px)}
+.hero-glow{position:absolute;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(232,184,194,0.2) 0%,transparent 70%);right:-80px;top:-80px;pointer-events:none}
+.hero-left{position:relative;z-index:2;padding-right:2rem}
+.hero-badge{display:inline-flex;align-items:center;gap:0.5rem;background:rgba(255,255,255,0.85);border:1px solid var(--blush-deep);border-radius:50px;padding:0.45rem 1.1rem;font-size:0.72rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--rose);font-weight:500;margin-bottom:1.8rem}
+.hero-badge .dot{width:5px;height:5px;border-radius:50%;background:var(--rose)}
+.eyebrow{font-family:'Caveat',cursive;font-size:1.05rem;color:var(--rose);margin-bottom:0.5rem}
+h1{font-family:'DM Serif Display',serif;font-size:4.2rem;font-weight:400;line-height:1.07;color:var(--navy);margin-bottom:0.5rem}
+h1 em{font-style:italic;color:var(--rose)}
+.script{font-family:'Caveat',cursive;font-size:1.8rem;color:var(--rose);margin-bottom:1.5rem;display:block}
+.hero-sub{font-size:0.95rem;line-height:1.85;color:var(--text-mid);max-width:420px;margin-bottom:2.5rem;font-weight:300}
+.hero-actions{display:flex;gap:1rem;flex-wrap:wrap}
+.trust{display:flex;align-items:center;gap:0.75rem;margin-top:1.8rem;font-size:0.75rem;color:var(--text-soft)}
+.hearts{color:var(--rose);letter-spacing:2px}
+.hero-right{position:relative;z-index:2;height:600px;display:flex;align-items:center;justify-content:center}
+.hero-ring{position:absolute;width:360px;height:360px;border-radius:50%;border:1px dashed rgba(232,184,194,0.45);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none}
+.hero-ring2{position:absolute;width:460px;height:460px;border-radius:50%;border:0.5px solid rgba(232,184,194,0.2);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none}
+.hero-ring3{position:absolute;width:260px;height:260px;border-radius:50%;border:1px solid rgba(200,122,138,0.15);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none}
+.rink-art{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:1;animation:breathe 6s ease-in-out infinite}
+@keyframes breathe{0%,100%{transform:translate(-50%,-50%) scale(1)}50%{transform:translate(-50%,-52%) scale(1.03)}}
+.fc{position:absolute;background:rgba(255,255,255,0.93);border:1px solid rgba(232,184,194,0.5);border-radius:20px;padding:1.2rem 1.4rem;box-shadow:0 8px 32px rgba(200,122,138,0.1);z-index:3}
+.fc-a{width:225px;top:25px;left:-15px;animation:f1 7s ease-in-out infinite}
+.fc-b{width:205px;bottom:25px;right:-10px;animation:f2 6s ease-in-out infinite}
+.fc-c{width:185px;top:185px;right:-5px;animation:f3 8s ease-in-out infinite}
+.fc-d{width:155px;bottom:105px;left:10px;animation:f1 9s ease-in-out infinite;background:var(--navy);border-color:var(--navy);text-align:center}
+@keyframes f1{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+@keyframes f2{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+@keyframes f3{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+.fc-tag{font-size:0.62rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--rose);font-weight:500;margin-bottom:0.4rem}
+.fc-title{font-family:'DM Serif Display',serif;font-size:0.95rem;color:var(--navy);margin-bottom:0.4rem}
+.fc-body{font-size:0.72rem;color:var(--text-soft);line-height:1.6}
+.fc-bar{margin-top:0.75rem;background:var(--blush-mid);height:3px;border-radius:2px}
+.fc-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--rose),var(--blush-deep))}
+.fc-score{font-size:0.68rem;color:var(--text-soft);margin-top:0.3rem;display:flex;justify-content:space-between}
+.fc-d .fc-tag{color:var(--blush-mid)}
+.fc-d .fc-title{color:var(--white);font-size:0.88rem}
+.fc-d .fc-body{color:rgba(255,255,255,0.55)}
+.blade-divider{text-align:center;padding:2rem 3.5rem;background:var(--white);border-top:1px solid var(--blush-mid);border-bottom:1px solid var(--blush-mid);display:flex;justify-content:center;align-items:center;gap:3rem;flex-wrap:wrap}
+.blade-divider .item{display:flex;align-items:center;gap:0.6rem;font-size:0.78rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-mid)}
+.blade-divider .sym{color:var(--rose)}
+.home-section{padding:6rem 3.5rem}
+.elements-section{background:var(--ice-light);padding:5rem 3.5rem}
+.elements-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:1rem;margin-top:3rem}
+.epill-home{background:var(--white);border:1px solid var(--blush-mid);border-radius:16px;padding:1.25rem 1rem;text-align:center;transition:all 0.2s}
+.epill-home:hover{border-color:var(--blush-deep);transform:translateY(-3px);box-shadow:0 8px 20px rgba(200,122,138,0.1)}
+.eicon{font-size:1.5rem;margin-bottom:0.5rem;display:block}
+.ename{font-family:'DM Serif Display',serif;font-size:0.85rem;color:var(--navy);margin-bottom:0.2rem}
+.elevel{font-size:0.65rem;color:var(--text-soft);letter-spacing:0.08em;text-transform:uppercase}
+.features-section{background:var(--white);padding:6rem 3.5rem}
+.fgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem;margin-top:3.5rem}
+.fcard{background:var(--cream);border:1px solid var(--blush-mid);border-radius:20px;padding:2rem 1.75rem;transition:all 0.25s;position:relative}
+.fcard:hover{transform:translateY(-4px);border-color:var(--blush-deep);box-shadow:0 12px 32px rgba(200,122,138,0.12)}
+.ftag{position:absolute;top:1rem;right:1rem;font-size:0.6rem;letter-spacing:0.1em;text-transform:uppercase;background:var(--blush-mid);color:var(--rose-dark);padding:0.25rem 0.6rem;border-radius:50px;font-weight:500}
+.ficon{width:48px;height:48px;border-radius:50%;background:var(--blush);border:1px solid var(--blush-deep);display:flex;align-items:center;justify-content:center;font-size:1.3rem;margin-bottom:1rem}
+.fname{font-family:'DM Serif Display',serif;font-size:1.1rem;color:var(--navy);margin-bottom:0.6rem}
+.fdesc{font-size:0.82rem;color:var(--text-soft);line-height:1.75;font-weight:300}
+.how-section{background:linear-gradient(135deg,var(--navy) 0%,#162338 100%);padding:6rem 3.5rem;position:relative;overflow:hidden}
+.how-ice{position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 58px,rgba(255,255,255,0.02) 58px,rgba(255,255,255,0.02) 59px)}
+.how-section h2{color:var(--white)}
+.how-section .sec-label{color:var(--blush-deep)}
+.how-section .sec-sub{color:rgba(255,255,255,0.5)}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:1.5rem;margin-top:3.5rem;position:relative;z-index:1}
+.step{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:2rem 1.5rem}
+.sstep{font-size:1.5rem;margin-bottom:0.75rem;display:block}
+.snum{font-family:'DM Serif Display',serif;font-size:2rem;font-style:italic;color:rgba(232,184,194,0.2);line-height:1;margin-bottom:0.5rem}
+.stitle{font-family:'DM Serif Display',serif;font-size:1rem;color:var(--white);margin-bottom:0.6rem}
+.sdesc{font-size:0.8rem;color:rgba(255,255,255,0.45);line-height:1.75;font-weight:300}
+.levels-section{background:var(--blush);padding:6rem 3.5rem}
+.lgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem;margin-top:3.5rem}
+.lcard{background:var(--white);border:1px solid var(--blush-mid);border-radius:24px;padding:2.5rem 2rem;text-align:center;transition:all 0.25s}
+.lcard.feat{background:var(--navy);border-color:var(--navy)}
+.lcard:hover{transform:translateY(-4px);box-shadow:0 12px 32px rgba(200,122,138,0.15)}
+.licon{font-size:2rem;margin-bottom:1rem;display:block}
+.lname{font-family:'DM Serif Display',serif;font-size:1.2rem;margin-bottom:0.3rem}
+.lcard:not(.feat) .lname{color:var(--navy)}
+.lcard.feat .lname{color:var(--white)}
+.lscript{font-family:'Caveat',cursive;font-size:0.95rem;color:var(--rose);margin-bottom:1rem;display:block}
+.lcard.feat .lscript{color:var(--blush-deep)}
+.llist{list-style:none;text-align:left}
+.llist li{font-size:0.8rem;color:var(--text-soft);padding:0.4rem 0;border-bottom:1px solid var(--blush-mid);display:flex;align-items:center;gap:0.5rem}
+.lcard.feat .llist li{color:rgba(255,255,255,0.55);border-color:rgba(255,255,255,0.08)}
+.llist li::before{content:'🩰';font-size:0.7rem}
+.market-section{background:var(--white);padding:6rem 3.5rem}
+.minner{display:grid;grid-template-columns:1fr 1fr;gap:5rem;align-items:center}
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.mcard{background:var(--cream);border:1px solid var(--blush-mid);border-radius:18px;padding:1.5rem 1.25rem;transition:all 0.2s}
+.mcard:hover{border-color:var(--blush-deep);transform:translateY(-2px)}
+.mcard.pink{background:var(--blush);border-color:var(--blush-deep)}
+.micon{font-size:1.4rem;margin-bottom:0.6rem;display:block}
+.mname{font-family:'DM Serif Display',serif;font-size:0.95rem;color:var(--navy);margin-bottom:0.3rem}
+.msub{font-size:0.72rem;color:var(--text-soft);line-height:1.55}
+.cta-section{background:linear-gradient(160deg,#F9EEF0 0%,#F2D8DE 40%,#EAF4F8 100%);text-align:center;padding:7rem 3.5rem;position:relative;overflow:hidden}
+.cta-ring{position:absolute;width:500px;height:300px;border-radius:50%;border:1px solid rgba(200,122,138,0.1);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none}
+.cta-ring2{position:absolute;width:700px;height:420px;border-radius:50%;border:0.5px solid rgba(200,122,138,0.06);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none}
+.cta-badge{display:inline-flex;align-items:center;gap:0.5rem;background:rgba(255,255,255,0.7);border:1px solid var(--blush-deep);border-radius:50px;padding:0.45rem 1.2rem;font-size:0.72rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--rose);font-weight:500;margin-bottom:1.5rem}
+.cta-section h2{font-size:3.2rem;margin:0 auto 0.5rem;max-width:560px;position:relative;z-index:1}
+.cta-script{font-family:'Caveat',cursive;font-size:1.4rem;color:var(--rose);margin-bottom:1.5rem;display:block;position:relative;z-index:1}
+.cta-section p{color:var(--text-mid);margin-bottom:2.5rem;font-weight:300;max-width:420px;margin-left:auto;margin-right:auto;line-height:1.85;font-size:0.95rem;position:relative;z-index:1}
+footer{background:var(--navy);padding:3rem 3.5rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1.5rem}
+.flogo{font-family:'DM Serif Display',serif;font-size:1.5rem;color:var(--white)}
+.ftagline{font-family:'Caveat',cursive;font-size:0.95rem;color:var(--blush-deep);margin-top:0.2rem}
+.flinks{display:flex;gap:2rem;flex-wrap:wrap}
+.flinks a{font-size:0.75rem;color:rgba(255,255,255,0.4);text-decoration:none;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer}
+.flinks a:hover{color:var(--blush-deep)}
+.fmyp{font-size:0.72rem;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.1);padding:0.4rem 1rem;border-radius:50px;letter-spacing:0.06em}
+@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+
+/* ===================== FEEDBACK PAGE ===================== */
+.inner-page{max-width:1200px;margin:0 auto;padding:3rem}
+.page-eyebrow{font-family:'Caveat',cursive;font-size:1.1rem;color:var(--rose);margin-bottom:0.3rem}
+.page-h1{font-family:'DM Serif Display',serif;font-size:2.4rem;color:var(--navy);font-weight:400}
+.page-h1 em{font-style:italic;color:var(--rose)}
+.page-sub-text{font-size:0.9rem;color:var(--text-mid);font-weight:300;margin-top:0.4rem}
+.element-select-section{margin:2rem 0}
+.section-title{font-family:'DM Serif Display',serif;font-size:1.1rem;color:var(--navy);margin-bottom:1rem}
+.element-pills{display:flex;flex-wrap:wrap;gap:0.6rem;align-items:center}
+.epill{padding:0.5rem 1.1rem;border-radius:50px;border:1.5px solid var(--blush-mid);background:var(--white);font-size:0.78rem;color:var(--text-mid);cursor:pointer;transition:all 0.2s;font-family:'Jost',sans-serif}
+.epill:hover,.epill.selected{background:var(--navy);color:var(--white);border-color:var(--navy)}
+.epill.selected-rose{background:var(--blush);color:var(--rose-dark);border-color:var(--rose)}
+.epill.other-pill{background:var(--blush);color:var(--rose-dark);border-color:var(--blush-deep)}
+.epill.other-pill.selected{background:var(--rose);color:var(--white);border-color:var(--rose)}
+.other-input-wrap{display:none;align-items:center;gap:0.6rem;margin-top:0.5rem;width:100%}
+.other-input-wrap.visible{display:flex}
+.other-input{flex:1;max-width:320px;padding:0.55rem 1.1rem;border-radius:50px;border:1.5px solid var(--blush-deep);background:var(--white);font-size:0.82rem;color:var(--text-dark);font-family:'Jost',sans-serif;outline:none;transition:border-color 0.2s}
+.other-input:focus{border-color:var(--rose)}
+.other-input::placeholder{color:var(--text-soft)}
+.other-hint{font-family:'Caveat',cursive;font-size:0.9rem;color:var(--rose)}
+.results-grid{display:grid;grid-template-columns:1fr 1fr;gap:2rem}
+.video-panel{background:var(--navy);border-radius:20px;overflow:hidden;position:relative;aspect-ratio:16/10}
+.video-placeholder{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#1E2D4A,#162338);position:relative}
+.video-play{width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,0.1);border:1.5px solid rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-size:1.4rem;margin-bottom:1rem;cursor:pointer}
+.video-label{font-size:0.8rem;color:rgba(255,255,255,0.4);letter-spacing:0.08em;text-transform:uppercase}
+.video-title-label{font-family:'DM Serif Display',serif;font-size:1rem;color:var(--white);margin-top:0.3rem}
+.frame-marker{position:absolute;border:1.5px solid var(--rose);border-radius:4px;pointer-events:none}
+.fm1{top:20%;left:35%;width:30%;height:40%}
+.fm2{top:55%;left:20%;width:20%;height:25%;border-color:var(--gold)}
+.fm-label{position:absolute;top:-22px;left:0;font-size:0.6rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--rose);background:rgba(30,45,74,0.8);padding:2px 6px;border-radius:4px;white-space:nowrap}
+.fm2 .fm-label{color:var(--gold)}
+.timeline{position:absolute;bottom:0;left:0;right:0;padding:0.75rem 1rem;background:linear-gradient(transparent,rgba(0,0,0,0.5))}
+.scrubber-track{background:rgba(255,255,255,0.15);height:3px;border-radius:2px;position:relative;cursor:pointer}
+.scrubber-fill{background:var(--rose);height:100%;width:42%;border-radius:2px}
+.scrubber-dot{width:10px;height:10px;border-radius:50%;background:var(--white);position:absolute;top:50%;right:58%;transform:translate(50%,-50%)}
+.time-labels{display:flex;justify-content:space-between;margin-top:0.4rem;font-size:0.62rem;color:rgba(255,255,255,0.4)}
+.feedback-panel{display:flex;flex-direction:column;gap:1.2rem;overflow-y:auto;max-height:520px;padding-right:0.3rem}
+.score-card{background:var(--white);border:1px solid var(--blush-mid);border-radius:18px;padding:1.4rem 1.6rem}
+.score-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
+.score-label-sm{font-size:0.7rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--rose);font-weight:500}
+.score-big{font-family:'DM Serif Display',serif;font-size:2.8rem;color:var(--navy);line-height:1}
+.score-suffix{font-size:1rem;color:var(--text-soft)}
+.score-badge{background:var(--blush);color:var(--rose-dark);font-size:0.68rem;padding:0.25rem 0.7rem;border-radius:50px;font-weight:500}
+.score-bars{display:flex;flex-direction:column;gap:0.6rem}
+.bar-row{display:flex;align-items:center;gap:0.8rem}
+.bar-name{font-size:0.75rem;color:var(--text-mid);width:90px;flex-shrink:0}
+.bar-track{flex:1;background:var(--blush-mid);height:5px;border-radius:3px;overflow:hidden}
+.bar-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--rose),var(--blush-deep))}
+.bar-val{font-size:0.72rem;color:var(--text-soft);width:30px;text-align:right;flex-shrink:0}
+.feedback-card{background:var(--white);border:1px solid var(--blush-mid);border-radius:18px;padding:1.3rem 1.5rem;transition:all 0.2s}
+.feedback-card:hover{border-color:var(--blush-deep);box-shadow:0 4px 16px rgba(200,122,138,0.1)}
+.fc-top{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:0.7rem}
+.fc-type{display:flex;align-items:center;gap:0.5rem}
+.fc-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:3px}
+.dot-red{background:#E87A7A}
+.dot-amber{background:var(--gold)}
+.dot-green{background:#7AC4A0}
+.fc-element{font-family:'DM Serif Display',serif;font-size:0.95rem;color:var(--navy)}
+.fc-priority{font-size:0.62rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.2rem 0.6rem;border-radius:50px;font-weight:500;white-space:nowrap}
+.priority-fix{background:#FDE8E8;color:#C05050}
+.priority-check{background:#FEF3DC;color:#9A7020}
+.priority-good{background:#E8F5EF;color:#3A7A5A}
+.fc-body-text{font-size:0.8rem;color:var(--text-soft);line-height:1.7;margin-bottom:0.7rem}
+.fc-tip{background:var(--blush);border-radius:10px;padding:0.6rem 0.9rem;font-size:0.76rem;color:var(--rose-dark);line-height:1.6;display:flex;gap:0.5rem}
+.safety-card{background:linear-gradient(135deg,#FEF3DC,#FDE8CE);border:1px solid #E8C87A;border-radius:18px;padding:1.3rem 1.5rem}
+.safety-top{display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem}
+.safety-title{font-family:'DM Serif Display',serif;font-size:0.95rem;color:#6B4A10}
+.safety-body{font-size:0.8rem;color:#8B6020;line-height:1.7}
+.bottom-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.5rem;margin-top:1.5rem}
+.stat-mini{background:var(--white);border:1px solid var(--blush-mid);border-radius:16px;padding:1.2rem 1.4rem;text-align:center}
+.stat-mini-num{font-family:'DM Serif Display',serif;font-size:2rem;color:var(--navy)}
+.stat-mini-label{font-size:0.72rem;color:var(--text-soft);letter-spacing:0.08em;text-transform:uppercase;margin-top:0.2rem}
+.stat-mini-change{font-size:0.72rem;color:#7AC4A0;font-weight:500;margin-top:0.2rem}
+.btn-row{display:flex;gap:1rem;margin-top:2rem;justify-content:flex-end}
+.btn-secondary{background:transparent;color:var(--navy);padding:0.75rem 1.5rem;border-radius:50px;font-size:0.78rem;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;border:1.5px solid var(--blush-deep);font-family:'Jost',sans-serif}
+
+/* ===================== PROGRESS PAGE ===================== */
+.profile-hero-bar{background:linear-gradient(135deg,var(--navy) 0%,#2D3F5C 100%);border-radius:24px;padding:2.5rem;margin-bottom:2rem;display:grid;grid-template-columns:auto 1fr auto;gap:2rem;align-items:center;position:relative;overflow:hidden}
+.profile-hero-bar::before{content:'';position:absolute;right:-40px;top:-40px;width:200px;height:200px;border-radius:50%;border:1px solid rgba(232,184,194,0.1);pointer-events:none}
+.ph-avatar{width:80px;height:80px;border-radius:50%;background:var(--blush-mid);border:2.5px solid var(--blush-deep);display:flex;align-items:center;justify-content:center;font-size:2rem;flex-shrink:0}
+.ph-name{font-family:'DM Serif Display',serif;font-size:1.8rem;color:var(--white);margin-bottom:0.2rem}
+.ph-script{font-family:'Caveat',cursive;font-size:1rem;color:var(--blush-deep);margin-bottom:0.6rem;display:block}
+.ph-tags{display:flex;gap:0.5rem;flex-wrap:wrap}
+.ptag{font-size:0.67rem;letter-spacing:0.1em;text-transform:uppercase;background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.6);padding:0.25rem 0.7rem;border-radius:50px;border:0.5px solid rgba(255,255,255,0.12)}
+.ph-level{text-align:right;position:relative;z-index:1}
+.level-label{font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--blush-deep);margin-bottom:0.3rem}
+.level-name-big{font-family:'DM Serif Display',serif;font-size:1.4rem;color:var(--white);font-style:italic}
+.level-since{font-size:0.72rem;color:rgba(255,255,255,0.35);margin-top:0.2rem}
+.stats-row-4{display:grid;grid-template-columns:repeat(4,1fr);gap:1.2rem;margin-bottom:2rem}
+.stat-card{background:var(--white);border:1px solid var(--blush-mid);border-radius:18px;padding:1.4rem 1.5rem;position:relative}
+.stat-card.highlight{background:var(--blush);border-color:var(--blush-deep)}
+.stat-icon-big{font-size:1.2rem;margin-bottom:0.6rem;display:block}
+.stat-num-big{font-family:'DM Serif Display',serif;font-size:2.2rem;color:var(--navy);line-height:1}
+.stat-label-sm{font-size:0.72rem;color:var(--text-soft);letter-spacing:0.08em;text-transform:uppercase;margin-top:0.3rem}
+.stat-delta{font-size:0.72rem;color:#7AC4A0;font-weight:500;margin-top:0.3rem}
+.main-grid-2col{display:grid;grid-template-columns:2fr 1fr;gap:1.5rem;margin-bottom:1.5rem}
+.chart-card{background:var(--white);border:1px solid var(--blush-mid);border-radius:20px;padding:1.8rem}
+.card-header-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem}
+.card-title-serif{font-family:'DM Serif Display',serif;font-size:1.1rem;color:var(--navy)}
+.card-script-sm{font-family:'Caveat',cursive;font-size:0.85rem;color:var(--rose)}
+.filter-pills{display:flex;gap:0.4rem}
+.fpill{font-size:0.65rem;letter-spacing:0.08em;text-transform:uppercase;padding:0.25rem 0.7rem;border-radius:50px;border:1px solid var(--blush-mid);color:var(--text-soft);cursor:pointer;background:transparent}
+.fpill.active{background:var(--navy);color:var(--white);border-color:var(--navy)}
+.mastery-card{background:var(--white);border:1px solid var(--blush-mid);border-radius:20px;padding:1.8rem}
+.mastery-list{display:flex;flex-direction:column;gap:1rem;margin-top:0.5rem}
+.mastery-item{display:flex;flex-direction:column;gap:0.3rem}
+.mastery-top{display:flex;justify-content:space-between;align-items:center}
+.mastery-name{font-size:0.82rem;color:var(--text-dark)}
+.mastery-pct{font-size:0.75rem;color:var(--text-soft)}
+.mastery-track{background:var(--blush-mid);height:5px;border-radius:3px;overflow:hidden}
+.mastery-fill{height:100%;border-radius:3px}
+.mf-rose{background:linear-gradient(90deg,var(--rose),var(--blush-deep))}
+.mf-gold{background:linear-gradient(90deg,var(--gold),#E8D5B0)}
+.mf-ice{background:linear-gradient(90deg,#5BB8D4,#B8E4F4)}
+.mastery-badge{font-size:0.6rem;letter-spacing:0.08em;text-transform:uppercase;padding:0.15rem 0.5rem;border-radius:50px;font-weight:500}
+.mb-gold{background:#FEF3DC;color:#9A7020}
+.mb-rose{background:var(--blush);color:var(--rose-dark)}
+.mb-ice{background:var(--ice);color:#2A7A9A}
+.mb-gray{background:#F0F0F0;color:#6A6A6A}
+.bottom-grid-2col{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
+.sessions-card,.goals-card{background:var(--white);border:1px solid var(--blush-mid);border-radius:20px;padding:1.8rem}
+.session-list{display:flex;flex-direction:column;gap:0.7rem;margin-top:1rem}
+.session-item{display:flex;align-items:center;gap:1rem;padding:0.8rem 1rem;background:var(--cream);border-radius:12px;border:1px solid var(--blush-mid)}
+.session-info{flex:1}
+.session-title{font-size:0.82rem;color:var(--text-dark)}
+.session-date{font-size:0.7rem;color:var(--text-soft)}
+.session-score{font-family:'DM Serif Display',serif;font-size:1.1rem;color:var(--navy)}
+.session-delta{font-size:0.65rem;color:#7AC4A0;font-weight:500}
+.goals-list{display:flex;flex-direction:column;gap:0.8rem;margin-top:1rem}
+.goal-item{display:flex;align-items:center;gap:0.9rem;padding:0.8rem 1rem;border-radius:12px;border:1px solid var(--blush-mid)}
+.goal-item.done{background:var(--blush);border-color:var(--blush-deep)}
+.goal-item.active-goal{background:var(--cream)}
+.goal-check{width:22px;height:22px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:0.7rem}
+.gc-done{background:var(--rose);color:var(--white)}
+.gc-active{background:var(--white);border:1.5px solid var(--blush-deep)}
+.goal-text{font-size:0.82rem;color:var(--text-dark);flex:1}
+.goal-item.done .goal-text{color:var(--text-soft);text-decoration:line-through;text-decoration-color:var(--blush-deep)}
+.goal-script{font-family:'Caveat',cursive;font-size:0.78rem;color:var(--rose)}
+
+/* ===================== MARKETPLACE PAGE ===================== */
+.market-header-band{background:linear-gradient(135deg,var(--navy),#2D3F5C);border-radius:24px;padding:2.5rem 3rem;margin-bottom:2rem;display:flex;align-items:center;justify-content:space-between;position:relative;overflow:hidden}
+.market-header-band::before{content:'';position:absolute;right:-30px;top:-30px;width:180px;height:180px;border-radius:50%;border:1px solid rgba(232,184,194,0.1)}
+.mh-eyebrow{font-family:'Caveat',cursive;font-size:1rem;color:var(--blush-deep);margin-bottom:0.3rem}
+.mh-title{font-family:'DM Serif Display',serif;font-size:2rem;color:var(--white)}
+.mh-title em{font-style:italic;color:var(--blush-deep)}
+.mh-sub{font-size:0.85rem;color:rgba(255,255,255,0.45);margin-top:0.4rem;font-weight:300}
+.mh-stats{display:flex;gap:2.5rem;position:relative;z-index:1}
+.mhs{text-align:center}
+.mhs-num{font-family:'DM Serif Display',serif;font-size:1.8rem;color:var(--white)}
+.mhs-label{font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;color:rgba(255,255,255,0.35);margin-top:0.1rem}
+.search-row{display:flex;align-items:center;gap:1rem;margin-bottom:1.8rem;flex-wrap:wrap}
+.search-box{flex:1;min-width:200px;display:flex;align-items:center;gap:0.7rem;background:var(--white);border:1.5px solid var(--blush-mid);border-radius:50px;padding:0.7rem 1.2rem}
+.search-box input{border:none;background:transparent;font-size:0.85rem;color:var(--text-dark);font-family:'Jost',sans-serif;outline:none;flex:1}
+.search-box input::placeholder{color:var(--text-soft)}
+.filter-row{display:flex;gap:0.5rem;flex-wrap:wrap}
+.filter-btn{padding:0.55rem 1.1rem;border-radius:50px;border:1.5px solid var(--blush-mid);background:var(--white);font-size:0.75rem;color:var(--text-mid);cursor:pointer;font-family:'Jost',sans-serif;transition:all 0.2s;display:flex;align-items:center;gap:0.4rem}
+.filter-btn.active{background:var(--navy);color:var(--white);border-color:var(--navy)}
+.sort-select{padding:0.55rem 1rem;border-radius:50px;border:1.5px solid var(--blush-mid);background:var(--white);font-size:0.75rem;color:var(--text-mid);font-family:'Jost',sans-serif;cursor:pointer;outline:none}
+.cat-tabs{display:flex;gap:0;margin-bottom:2rem;border-bottom:1px solid var(--blush-mid)}
+.cat-tab{padding:0.7rem 1.4rem;font-size:0.78rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-soft);cursor:pointer;border-bottom:2px solid transparent;transition:all 0.2s;display:flex;align-items:center;gap:0.4rem}
+.cat-tab.active{color:var(--rose);border-bottom-color:var(--rose)}
+.cat-count{background:var(--blush-mid);color:var(--rose-dark);font-size:0.65rem;padding:0.15rem 0.5rem;border-radius:50px;font-weight:500}
+.cat-tab.active .cat-count{background:var(--rose);color:var(--white)}
+.listing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem}
+.listing-card{background:var(--white);border:1px solid var(--blush-mid);border-radius:20px;overflow:hidden;transition:all 0.25s;cursor:pointer}
+.listing-card:hover{transform:translateY(-4px);box-shadow:0 12px 32px rgba(200,122,138,0.12);border-color:var(--blush-deep)}
+.listing-card.featured{border-color:var(--rose);box-shadow:0 4px 16px rgba(200,122,138,0.15)}
+.card-banner{height:90px;display:flex;align-items:center;justify-content:center;position:relative;font-size:2.5rem}
+.banner-coach{background:linear-gradient(135deg,#F2D8DE,#E8B8C2)}
+.banner-tech{background:linear-gradient(135deg,var(--ice),#B8E4F4)}
+.banner-partner{background:linear-gradient(135deg,#F9EEF0,#F2D8DE)}
+.banner-ice-rink{background:linear-gradient(135deg,#EAF4F8,var(--ice))}
+.featured-tag{position:absolute;top:10px;right:10px;background:var(--rose);color:var(--white);font-size:0.6rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.2rem 0.6rem;border-radius:50px;font-weight:500}
+.card-body-listing{padding:1.4rem}
+.card-type-label{font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--rose);font-weight:500;margin-bottom:0.3rem}
+.card-name-big{font-family:'DM Serif Display',serif;font-size:1.05rem;color:var(--navy);margin-bottom:0.2rem}
+.card-location-sm{font-size:0.75rem;color:var(--text-soft);margin-bottom:0.6rem}
+.card-tags-row{display:flex;flex-wrap:wrap;gap:0.4rem;margin-bottom:0.8rem}
+.ctag{font-size:0.65rem;background:var(--blush);color:var(--rose-dark);padding:0.2rem 0.6rem;border-radius:50px}
+.ctag.ice-tag{background:var(--ice);color:#2A7A9A}
+.card-rating-row{display:flex;align-items:center;gap:0.4rem;margin-bottom:0.8rem}
+.stars-gold{color:var(--gold);font-size:0.75rem;letter-spacing:1px}
+.rating-num-sm{font-size:0.78rem;color:var(--text-dark);font-weight:500}
+.review-count-sm{font-size:0.72rem;color:var(--text-soft)}
+.card-footer-row{display:flex;align-items:center;justify-content:space-between;padding-top:0.8rem;border-top:1px solid var(--blush-mid)}
+.card-price-big{font-family:'DM Serif Display',serif;font-size:1rem;color:var(--navy)}
+.price-unit-sm{font-size:0.7rem;color:var(--text-soft);font-family:'Jost',sans-serif}
+.btn-book{background:var(--navy);color:var(--white);padding:0.45rem 1.1rem;border-radius:50px;font-size:0.72rem;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;border:none;font-family:'Jost',sans-serif;font-weight:500;transition:background 0.2s}
+.btn-book:hover{background:var(--rose-dark)}
+.btn-view{background:transparent;color:var(--navy);padding:0.45rem 1.1rem;border-radius:50px;font-size:0.72rem;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;border:1.5px solid var(--blush-mid);font-family:'Jost',sans-serif}
+.avail-dot{width:6px;height:6px;border-radius:50%;background:#7AC4A0;display:inline-block;margin-right:3px}
+
+/* ===================== COACH PROFILE PAGE ===================== */
+.breadcrumb{font-size:0.75rem;color:var(--text-soft);margin-bottom:1.5rem;display:flex;align-items:center;gap:0.4rem}
+.breadcrumb a{color:var(--rose);text-decoration:none;cursor:pointer}
+.profile-header-card{display:grid;grid-template-columns:auto 1fr auto;gap:2.5rem;align-items:start;margin-bottom:2.5rem;padding:2.5rem;background:var(--white);border:1px solid var(--blush-mid);border-radius:24px}
+.coach-avatar{width:110px;height:110px;border-radius:50%;background:linear-gradient(135deg,var(--blush-mid),var(--blush-deep));border:3px solid var(--blush-deep);display:flex;align-items:center;justify-content:center;font-size:3rem;flex-shrink:0}
+.ph-badge-tag{display:inline-flex;align-items:center;gap:0.4rem;background:var(--blush);border:1px solid var(--blush-deep);border-radius:50px;padding:0.25rem 0.8rem;font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--rose);font-weight:500;margin-bottom:0.6rem}
+.coach-name{font-family:'DM Serif Display',serif;font-size:2rem;color:var(--navy);margin-bottom:0.2rem}
+.coach-title{font-size:0.88rem;color:var(--text-mid);margin-bottom:0.6rem}
+.coach-meta{display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap}
+.coach-meta-item{font-size:0.78rem;color:var(--text-soft)}
+.coach-rating{display:flex;align-items:center;gap:0.5rem}
+.ph-actions-col{display:flex;flex-direction:column;gap:0.7rem;min-width:160px}
+.btn-book-big{background:var(--navy);color:var(--white);padding:0.75rem 1.5rem;border-radius:50px;font-size:0.8rem;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;border:none;font-family:'Jost',sans-serif;font-weight:500;text-align:center}
+.btn-msg{background:transparent;color:var(--navy);padding:0.7rem 1.5rem;border-radius:50px;font-size:0.78rem;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;border:1.5px solid var(--blush-mid);font-family:'Jost',sans-serif;text-align:center}
+.avail-badge-sm{text-align:center;font-size:0.72rem;color:#7AC4A0;font-weight:500}
+.stats-strip-4{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:2rem}
+.ss-card{background:var(--white);border:1px solid var(--blush-mid);border-radius:16px;padding:1.2rem;text-align:center}
+.ss-num{font-family:'DM Serif Display',serif;font-size:1.8rem;color:var(--navy)}
+.ss-label{font-size:0.68rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-soft);margin-top:0.2rem}
+.content-grid-profile{display:grid;grid-template-columns:1fr 340px;gap:2rem}
+.left-col-profile{display:flex;flex-direction:column;gap:1.5rem}
+.right-col-profile{display:flex;flex-direction:column;gap:1.5rem}
+.section-card{background:var(--white);border:1px solid var(--blush-mid);border-radius:20px;padding:1.8rem}
+.sc-title{font-family:'DM Serif Display',serif;font-size:1.1rem;color:var(--navy);margin-bottom:1.2rem;display:flex;align-items:center;gap:0.5rem}
+.bio-text{font-size:0.88rem;color:var(--text-mid);line-height:1.85;font-weight:300}
+.bio-script{font-family:'Caveat',cursive;font-size:1rem;color:var(--rose);margin-top:0.8rem;display:block}
+.spec-grid{display:grid;grid-template-columns:1fr 1fr;gap:0.6rem}
+.spec-pill{background:var(--blush);border:1px solid var(--blush-deep);border-radius:10px;padding:0.6rem 0.9rem;font-size:0.8rem;color:var(--rose-dark);display:flex;align-items:center;gap:0.4rem}
+.spec-pill.ice-spec{background:var(--ice);border-color:#B8E4F4;color:#2A7A9A}
+.reviews-list{display:flex;flex-direction:column;gap:1.2rem}
+.review-item{padding-bottom:1.2rem;border-bottom:1px solid var(--blush-mid)}
+.review-item:last-child{border-bottom:none;padding-bottom:0}
+.review-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem}
+.reviewer{display:flex;align-items:center;gap:0.6rem}
+.rev-avatar{width:28px;height:28px;border-radius:50%;background:var(--blush-mid);display:flex;align-items:center;justify-content:center;font-size:0.72rem;color:var(--rose-dark);font-weight:500}
+.rev-name{font-size:0.82rem;color:var(--text-dark);font-weight:500}
+.rev-stars{color:var(--gold);font-size:0.72rem;letter-spacing:1px}
+.rev-date{font-size:0.7rem;color:var(--text-soft)}
+.rev-text{font-size:0.82rem;color:var(--text-mid);line-height:1.7;font-weight:300}
+.rev-tag{font-size:0.65rem;background:var(--blush);color:var(--rose-dark);padding:0.15rem 0.5rem;border-radius:50px;margin-top:0.4rem;display:inline-block}
+
+/* CONTACT SECTION */
+.contact-section-card{background:var(--white);border:1px solid var(--blush-mid);border-radius:20px;padding:1.8rem}
+.contact-row{display:flex;align-items:center;gap:1rem;padding:0.9rem 0;border-bottom:1px solid var(--blush-mid)}
+.contact-row:last-child{border-bottom:none;padding-bottom:0}
+.contact-icon{width:38px;height:38px;border-radius:50%;background:var(--blush);border:1px solid var(--blush-deep);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0}
+.contact-info{flex:1}
+.contact-label{font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-soft);margin-bottom:0.15rem}
+.contact-value{font-size:0.85rem;color:var(--text-dark);font-weight:400}
+.contact-value a{color:var(--rose);text-decoration:none}
+.contact-value a:hover{text-decoration:underline}
+.contact-copy-btn{background:transparent;border:1px solid var(--blush-mid);border-radius:50px;padding:0.25rem 0.7rem;font-size:0.65rem;color:var(--text-soft);cursor:pointer;font-family:'Jost',sans-serif;transition:all 0.2s}
+.contact-copy-btn:hover{border-color:var(--rose);color:var(--rose)}
+.contact-note{font-family:'Caveat',cursive;font-size:0.9rem;color:var(--rose);margin-top:1rem;display:block;text-align:center}
+
+.avail-week{display:grid;grid-template-columns:repeat(7,1fr);gap:0.4rem;margin-bottom:1rem}
+.day-cell{text-align:center;border-radius:10px;padding:0.5rem 0.2rem;cursor:pointer;transition:all 0.2s}
+.day-cell.available{background:var(--blush);border:1px solid var(--blush-deep)}
+.day-cell.unavailable{background:#F5F5F5;border:1px solid #E8E8E8;opacity:0.5}
+.day-cell.day-selected{background:var(--navy);border-color:var(--navy)}
+.day-cell.day-selected .day-num,.day-cell.day-selected .day-name{color:var(--white)}
+.day-name{font-size:0.6rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-soft);margin-bottom:0.2rem}
+.day-num{font-family:'DM Serif Display',serif;font-size:1rem;color:var(--navy)}
+.day-cell.available .day-name{color:var(--rose)}
+.time-slots-grid{display:flex;flex-wrap:wrap;gap:0.4rem;margin-bottom:1.2rem}
+.tslot{padding:0.4rem 0.8rem;border-radius:8px;font-size:0.75rem;border:1px solid var(--blush-mid);color:var(--text-mid);cursor:pointer;transition:all 0.2s;background:var(--white)}
+.tslot:hover,.tslot.slot-selected{background:var(--navy);color:var(--white);border-color:var(--navy)}
+.tslot.full{opacity:0.4;cursor:not-allowed}
+.price-box{background:var(--blush);border:1px solid var(--blush-deep);border-radius:14px;padding:1.2rem;margin-bottom:1rem}
+.price-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem}
+.price-label-sm{font-size:0.8rem;color:var(--text-mid)}
+.price-val{font-family:'DM Serif Display',serif;font-size:1rem;color:var(--navy)}
+.price-total-row{display:flex;justify-content:space-between;align-items:center;padding-top:0.6rem;border-top:1px solid var(--blush-deep);margin-top:0.4rem}
+.price-total-label{font-size:0.82rem;color:var(--navy);font-weight:500}
+.price-total-val{font-family:'DM Serif Display',serif;font-size:1.2rem;color:var(--navy)}
+</style>
+</head>
+<body>
+
+<!-- AUTH MODAL -->
+<div id="auth-modal" style="display:none;position:fixed;inset:0;background:rgba(30,45,74,0.55);z-index:1000;align-items:center;justify-content:center;padding:1rem">
+  <div style="background:#FDF8F5;border-radius:24px;padding:2.5rem;width:90%;max-width:400px;position:relative">
+    <button onclick="document.getElementById('auth-modal').style.display='none'"
+      style="position:absolute;top:1rem;right:1rem;background:transparent;border:none;font-size:1.2rem;cursor:pointer;color:#7A8FA8">✕</button>
+    <div style="font-family:'DM Serif Display',serif;font-size:1.6rem;color:#1E2D4A;margin-bottom:0.2rem">Welcome ♡</div>
+    <div style="font-family:'Caveat',cursive;font-size:1rem;color:#C87A8A;margin-bottom:1.5rem">one edge at a time ✦</div>
+    <div style="display:flex;flex-direction:column;gap:0.75rem">
+      <input id="auth-name" type="text" placeholder="Your name (for sign up only)"
+        style="padding:0.75rem 1.2rem;border-radius:50px;border:1.5px solid #F2D8DE;font-family:'Jost',sans-serif;font-size:0.85rem;outline:none;background:white;color:#1E2D4A">
+      <input id="auth-email" type="email" placeholder="Email address"
+        style="padding:0.75rem 1.2rem;border-radius:50px;border:1.5px solid #F2D8DE;font-family:'Jost',sans-serif;font-size:0.85rem;outline:none;background:white;color:#1E2D4A">
+      <input id="auth-password" type="password" placeholder="Password (min 6 characters)"
+        style="padding:0.75rem 1.2rem;border-radius:50px;border:1.5px solid #F2D8DE;font-family:'Jost',sans-serif;font-size:0.85rem;outline:none;background:white;color:#1E2D4A">
+      <div id="auth-error" style="font-size:0.78rem;color:#E87A7A;padding:0 0.5rem;min-height:1rem"></div>
+      <button onclick="signUp()"
+        style="background:#1E2D4A;color:white;padding:0.78rem;border-radius:50px;font-size:0.8rem;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;border:none;font-family:'Jost',sans-serif;font-weight:500">
+        Create Account 🩰
+      </button>
+      <button onclick="logIn()"
+        style="background:transparent;color:#1E2D4A;padding:0.72rem;border-radius:50px;font-size:0.78rem;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;border:1.5px solid #F2D8DE;font-family:'Jost',sans-serif">
+        Log In Instead
+      </button>
+      <div style="font-size:0.7rem;color:#7A8FA8;text-align:center;line-height:1.6">By signing up you agree to Glideology's terms ♡</div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST NOTIFICATION -->
+<div id="auth-success" style="display:none;position:fixed;top:1.5rem;right:1.5rem;background:#1E2D4A;color:white;padding:0.8rem 1.5rem;border-radius:50px;font-size:0.82rem;z-index:1001;font-family:'Jost',sans-serif;box-shadow:0 4px 20px rgba(30,45,74,0.3)"></div>
+
+<!-- LIST YOUR SERVICES MODAL -->
+<div id="list-modal" style="display:none;position:fixed;inset:0;background:rgba(30,45,74,0.6);z-index:999;align-items:center;justify-content:center;padding:1rem">
+  <div style="background:#FDF8F5;border-radius:24px;width:90%;max-width:480px;position:relative;max-height:90vh;overflow-y:auto">
+
+    <!-- FORM STATE -->
+    <div id="list-form-state" style="padding:2.5rem">
+      <button onclick="document.getElementById('list-modal').style.display='none'"
+        style="position:absolute;top:1rem;right:1rem;background:transparent;border:none;font-size:1.2rem;cursor:pointer;color:#7A8FA8">✕</button>
+      <div style="font-family:'Caveat',cursive;font-size:1rem;color:#C87A8A;margin-bottom:0.3rem">join the community ✦</div>
+      <div style="font-family:'DM Serif Display',serif;font-size:1.5rem;color:#1E2D4A;margin-bottom:0.3rem">List Your Services ♡</div>
+      <div style="font-size:0.78rem;color:#7A8FA8;margin-bottom:1.5rem;line-height:1.6">Fill in your details and you'll appear as a real card in the Glideology marketplace ✦</div>
+
+      <div style="display:flex;flex-direction:column;gap:0.75rem">
+        <!-- Basic info -->
+        <div style="font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;color:#C87A8A;font-weight:500">About you ♡</div>
+        <input id="list-name" type="text" placeholder="Your full name" required
+          style="padding:0.7rem 1.1rem;border-radius:50px;border:1.5px solid #F2D8DE;font-family:'Jost',sans-serif;font-size:0.82rem;outline:none;background:white;color:#1E2D4A">
+        <input id="list-email" type="email" placeholder="Email address" required
+          style="padding:0.7rem 1.1rem;border-radius:50px;border:1.5px solid #F2D8DE;font-family:'Jost',sans-serif;font-size:0.82rem;outline:none;background:white;color:#1E2D4A">
+        <input id="list-phone" type="tel" placeholder="WhatsApp number (e.g. 971501234567)"
+          style="padding:0.7rem 1.1rem;border-radius:50px;border:1.5px solid #F2D8DE;font-family:'Jost',sans-serif;font-size:0.82rem;outline:none;background:white;color:#1E2D4A">
+        <input id="list-location" type="text" placeholder="Your city (e.g. Dubai, Abu Dhabi)"
+          style="padding:0.7rem 1.1rem;border-radius:50px;border:1.5px solid #F2D8DE;font-family:'Jost',sans-serif;font-size:0.82rem;outline:none;background:white;color:#1E2D4A">
+
+        <!-- Service type -->
+        <div style="font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;color:#C87A8A;font-weight:500;margin-top:0.3rem">What are you listing? ✦</div>
+        <select id="list-type" required
+          style="padding:0.7rem 1.1rem;border-radius:50px;border:1.5px solid #F2D8DE;font-family:'Jost',sans-serif;font-size:0.82rem;color:#4A5F7A;background:white;outline:none">
+          <option value="">Choose a category</option>
+          <optgroup label="Coaching & Training">
+            <option value="coach">👩‍🏫 Private Coaching</option>
+            <option value="coach">👥 Group Lessons</option>
+            <option value="coach">🏆 Competition Coaching</option>
+            <option value="coach">🌱 Learn to Skate (Beginners)</option>
+            <option value="coach">🎭 Artistic / Show Skating Coach</option>
+          </optgroup>
+          <optgroup label="Skating Disciplines">
+            <option value="synchro">🔄 Synchronised Skating Team</option>
+            <option value="partner">🤝 Pairs Partner Wanted</option>
+            <option value="partner">💃 Ice Dance Partner Wanted</option>
+            <option value="partner">🎪 Show / Theatre on Ice Partner</option>
+          </optgroup>
+          <optgroup label="Equipment & Technical">
+            <option value="tech">🔧 Blade Sharpening</option>
+            <option value="tech">👟 Boot Fitting & Custom Boots</option>
+            <option value="tech">⚙️ Blade Mounting & Adjustment</option>
+            <option value="tech">🧵 Costume Making / Alterations</option>
+          </optgroup>
+          <optgroup label="Rink & Ice Time">
+            <option value="rink">🏒 Public Session Slots</option>
+            <option value="rink">🧊 Private Ice Hire</option>
+            <option value="rink">🎓 Patch Ice / Practice Ice</option>
+          </optgroup>
+          <optgroup label="Other">
+            <option value="other">📸 Skating Photographer / Videographer</option>
+            <option value="other">🎵 Music Editing for Programs</option>
+            <option value="other">💪 Off-Ice Training / Choreography</option>
+            <option value="other">✦ Something else</option>
+          </optgroup>
+        </select>
+        <input id="list-title" type="text" placeholder="Your title (e.g. Figure Skating Coach · ISU Certified)"
+          style="padding:0.7rem 1.1rem;border-radius:50px;border:1.5px solid #F2D8DE;font-family:'Jost',sans-serif;font-size:0.82rem;outline:none;background:white;color:#1E2D4A">
+        <input id="list-price" type="text" placeholder="Price (e.g. AED 180 / hour, or Free)"
+          style="padding:0.7rem 1.1rem;border-radius:50px;border:1.5px solid #F2D8DE;font-family:'Jost',sans-serif;font-size:0.82rem;outline:none;background:white;color:#1E2D4A">
+
+        <!-- Payment info (for coaches) -->
+        <div style="font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;color:#C87A8A;font-weight:500;margin-top:0.3rem">Payment details ♡ <span style="font-weight:300;text-transform:none;letter-spacing:0">(shown to skaters when booking)</span></div>
+        <input id="list-iban" type="text" placeholder="IBAN (optional — for bank transfer payments)"
+          style="padding:0.7rem 1.1rem;border-radius:50px;border:1.5px solid #F2D8DE;font-family:'Jost',sans-serif;font-size:0.82rem;outline:none;background:white;color:#1E2D4A">
+        <input id="list-bank" type="text" placeholder="Bank name (e.g. Emirates NBD)"
+          style="padding:0.7rem 1.1rem;border-radius:50px;border:1.5px solid #F2D8DE;font-family:'Jost',sans-serif;font-size:0.82rem;outline:none;background:white;color:#1E2D4A">
+
+        <!-- Bio -->
+        <div style="font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;color:#C87A8A;font-weight:500;margin-top:0.3rem">About your services ✦</div>
+        <textarea id="list-bio" placeholder="Tell skaters about yourself — your experience, teaching style, what you specialise in ♡" rows="3" required
+          style="padding:0.7rem 1.1rem;border-radius:14px;border:1.5px solid #F2D8DE;font-family:'Jost',sans-serif;font-size:0.82rem;outline:none;background:white;color:#1E2D4A;resize:none"></textarea>
+        <input id="list-specialties" type="text" placeholder="Specialties, comma separated (e.g. Axel, Lutz, Beginners)"
+          style="padding:0.7rem 1.1rem;border-radius:50px;border:1.5px solid #F2D8DE;font-family:'Jost',sans-serif;font-size:0.82rem;outline:none;background:white;color:#1E2D4A">
+        <input id="list-availability" type="text" placeholder="Availability (e.g. Mon, Wed, Thu · 4–8 PM)"
+          style="padding:0.7rem 1.1rem;border-radius:50px;border:1.5px solid #F2D8DE;font-family:'Jost',sans-serif;font-size:0.82rem;outline:none;background:white;color:#1E2D4A">
+
+        <!-- CALENDLY FIELD -->
+        <div style="font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;color:#C87A8A;font-weight:500;margin-top:0.3rem">Online booking calendar <span style="font-weight:300;text-transform:none;letter-spacing:0">(optional — skaters can book directly) ♡</span></div>
+        <input id="list-calendly" type="url" placeholder="Your Calendly link (e.g. https://calendly.com/yourname)"
+          style="padding:0.7rem 1.1rem;border-radius:50px;border:1.5px solid #F2D8DE;font-family:'Jost',sans-serif;font-size:0.82rem;outline:none;background:white;color:#1E2D4A">
+        <div style="font-size:0.72rem;color:#7A8FA8;padding:0 0.5rem;line-height:1.6">Don't have a Calendly yet? Get one free at <strong>calendly.com</strong> — set your available slots once and skaters book themselves ✦</div>
+
+        <div id="list-error" style="font-size:0.75rem;color:#E87A7A;padding:0 0.3rem;display:none"></div>
+        <button onclick="submitListing()"
+          style="background:#1E2D4A;color:white;padding:0.85rem;border-radius:50px;font-size:0.82rem;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;border:none;font-family:'Jost',sans-serif;font-weight:500;margin-top:0.3rem">
+          Go Live on Glideology 🩰
+        </button>
+        <div style="font-size:0.72rem;color:#7A8FA8;text-align:center;line-height:1.6">Your listing goes live instantly — no waiting for approval ♡</div>
+      </div>
+    </div>
+
+    <!-- SUCCESS STATE -->
+    <div id="list-success-state" style="display:none;padding:3.5rem 2.5rem;text-align:center">
+      <div style="font-size:3rem;margin-bottom:1rem">🩰</div>
+      <div style="font-family:'DM Serif Display',serif;font-size:1.8rem;color:#1E2D4A;margin-bottom:0.3rem">You're live! ♡</div>
+      <div style="font-family:'Caveat',cursive;font-size:1.1rem;color:#C87A8A;margin-bottom:1.2rem">welcome to the community ✦</div>
+      <p style="font-size:0.85rem;color:#7A8FA8;line-height:1.75;margin-bottom:2rem">Your listing is now live in the Glideology marketplace. Skaters in the UAE can find and contact you right now ♡</p>
+      <button onclick="document.getElementById('list-modal').style.display='none';document.getElementById('list-success-state').style.display='none';document.getElementById('list-form-state').style.display='block';"
+        style="background:#1E2D4A;color:white;padding:0.85rem 2rem;border-radius:50px;font-size:0.82rem;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;border:none;font-family:'Jost',sans-serif;font-weight:500">
+        View Marketplace ✦
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- BOOKING + PAYMENT MODAL -->
+<div id="booking-modal" style="display:none;position:fixed;inset:0;background:rgba(30,45,74,0.6);z-index:999;align-items:center;justify-content:center;padding:1rem">
+  <div style="background:#FDF8F5;border-radius:24px;width:90%;max-width:460px;position:relative;overflow:hidden;max-height:90vh;overflow-y:auto">
+
+    <!-- STEP 1: BOOKING DETAILS -->
+    <div id="booking-step-1">
+      <div style="background:linear-gradient(135deg,#1E2D4A,#2D3F5C);padding:2rem 2.5rem 1.5rem">
+        <button onclick="document.getElementById('booking-modal').style.display='none'"
+          style="position:absolute;top:1rem;right:1rem;background:rgba(255,255,255,0.1);border:none;border-radius:50%;width:28px;height:28px;font-size:0.9rem;cursor:pointer;color:white">✕</button>
+        <div style="font-family:'Caveat',cursive;font-size:0.9rem;color:#E8B8C2;margin-bottom:0.3rem">booking summary ✦</div>
+        <div style="font-family:'DM Serif Display',serif;font-size:1.5rem;color:white">Coach Layla S.</div>
+        <div style="font-family:'Caveat',cursive;font-size:1rem;color:#E8B8C2;margin-top:0.2rem">one edge at a time ♡</div>
+      </div>
+
+      <div style="padding:1.5rem 2rem">
+        <!-- SESSION DETAILS -->
+        <div style="background:white;border:1px solid #F2D8DE;border-radius:16px;padding:1.2rem;margin-bottom:1.2rem">
+          <div style="font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;color:#C87A8A;font-weight:500;margin-bottom:0.8rem">Session Details</div>
+          <div style="display:flex;flex-direction:column;gap:0.5rem">
+            <div style="display:flex;justify-content:space-between;font-size:0.82rem">
+              <span style="color:#7A8FA8">Date</span><span style="color:#1E2D4A;font-weight:500">Wednesday, 21 May 2026</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:0.82rem">
+              <span style="color:#7A8FA8">Time</span><span style="color:#1E2D4A;font-weight:500">4:00 PM – 5:00 PM</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:0.82rem">
+              <span style="color:#7A8FA8">Location</span><span style="color:#1E2D4A;font-weight:500">Dubai Ice Rink</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:0.82rem">
+              <span style="color:#7A8FA8">Session type</span><span style="color:#1E2D4A;font-weight:500">Private · 1 hour</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- PRICE BREAKDOWN -->
+        <div style="background:white;border:1px solid #F2D8DE;border-radius:16px;padding:1.2rem;margin-bottom:1.2rem">
+          <div style="font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;color:#C87A8A;font-weight:500;margin-bottom:0.8rem">Price Breakdown</div>
+          <div style="display:flex;flex-direction:column;gap:0.5rem">
+            <div style="display:flex;justify-content:space-between;font-size:0.82rem">
+              <span style="color:#7A8FA8">Private lesson · 1 hr</span><span style="color:#1E2D4A">AED 180</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:0.82rem">
+              <span style="color:#7A8FA8">Rink entry fee</span><span style="color:#1E2D4A">AED 45</span>
+            </div>
+            <div style="height:1px;background:#F2D8DE;margin:0.4rem 0"></div>
+            <div style="display:flex;justify-content:space-between;font-size:0.95rem">
+              <span style="font-weight:500;color:#1E2D4A">Total</span>
+              <span style="font-family:'DM Serif Display',serif;font-size:1.2rem;color:#1E2D4A">AED 225</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- YOUR DETAILS FORM -->
+        <div style="font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;color:#C87A8A;font-weight:500;margin-bottom:0.8rem">Your Details</div>
+        <div style="display:flex;flex-direction:column;gap:0.7rem;margin-bottom:1.2rem">
+          <input id="book-name" type="text" placeholder="Your full name ♡" required
+            style="padding:0.7rem 1.1rem;border-radius:50px;border:1.5px solid #F2D8DE;font-family:'Jost',sans-serif;font-size:0.82rem;outline:none;background:white;color:#1E2D4A">
+          <input id="book-email" type="email" placeholder="Email address" required
+            style="padding:0.7rem 1.1rem;border-radius:50px;border:1.5px solid #F2D8DE;font-family:'Jost',sans-serif;font-size:0.82rem;outline:none;background:white;color:#1E2D4A">
+          <input id="book-phone" type="tel" placeholder="WhatsApp number"
+            style="padding:0.7rem 1.1rem;border-radius:50px;border:1.5px solid #F2D8DE;font-family:'Jost',sans-serif;font-size:0.82rem;outline:none;background:white;color:#1E2D4A">
+          <select id="book-level"
+            style="padding:0.7rem 1.1rem;border-radius:50px;border:1.5px solid #F2D8DE;font-family:'Jost',sans-serif;font-size:0.82rem;color:#4A5F7A;background:white;outline:none">
+            <option value="">Your skating level</option>
+            <option>Beginner</option><option>Intermediate</option><option>Competitive</option>
+          </select>
+          <textarea id="book-notes" placeholder="Anything Layla should know? ♡" rows="2"
+            style="padding:0.7rem 1.1rem;border-radius:14px;border:1.5px solid #F2D8DE;font-family:'Jost',sans-serif;font-size:0.82rem;outline:none;background:white;color:#1E2D4A;resize:none"></textarea>
+          <div id="book-error" style="font-size:0.75rem;color:#E87A7A;padding:0 0.5rem;display:none"></div>
+        </div>
+
+        <button onclick="goToPayment()"
+          style="width:100%;background:#1E2D4A;color:white;padding:0.85rem;border-radius:50px;font-size:0.82rem;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;border:none;font-family:'Jost',sans-serif;font-weight:500">
+          Continue to Payment →
+        </button>
+      </div>
+    </div>
+
+    <!-- STEP 2: CHOOSE PAYMENT METHOD -->
+    <div id="booking-step-2" style="display:none">
+      <div style="background:linear-gradient(135deg,#1E2D4A,#2D3F5C);padding:2rem 2.5rem 1.5rem">
+        <button onclick="document.getElementById('booking-modal').style.display='none'"
+          style="position:absolute;top:1rem;right:1rem;background:rgba(255,255,255,0.1);border:none;border-radius:50%;width:28px;height:28px;font-size:0.9rem;cursor:pointer;color:white">✕</button>
+        <div style="font-family:'Caveat',cursive;font-size:0.9rem;color:#E8B8C2;margin-bottom:0.3rem">choose how to pay ✦</div>
+        <div style="font-family:'DM Serif Display',serif;font-size:1.5rem;color:white">Payment Method</div>
+        <div style="font-family:'Caveat',cursive;font-size:0.95rem;color:#E8B8C2;margin-top:0.3rem">Total: AED 225 ♡</div>
+      </div>
+
+      <div style="padding:1.5rem 2rem">
+        <div style="font-size:0.82rem;color:#7A8FA8;line-height:1.7;margin-bottom:1.2rem;font-weight:300">
+          Choose your preferred payment method below. Your booking will be confirmed once Coach Layla receives payment ♡
+        </div>
+
+        <!-- PAYMENT OPTIONS -->
+        <div style="display:flex;flex-direction:column;gap:0.8rem;margin-bottom:1.5rem">
+
+          <!-- Bank Transfer -->
+          <div id="pay-bank" class="pay-option" onclick="selectPayment('bank')"
+            style="border:1.5px solid #F2D8DE;border-radius:16px;padding:1.1rem 1.3rem;cursor:pointer;transition:all 0.2s;background:white">
+            <div style="display:flex;align-items:center;gap:0.8rem">
+              <div style="width:38px;height:38px;border-radius:50%;background:#EAF4F8;display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0">🏦</div>
+              <div style="flex:1">
+                <div style="font-family:'DM Serif Display',serif;font-size:0.95rem;color:#1E2D4A">Bank Transfer</div>
+                <div style="font-size:0.72rem;color:#7A8FA8;margin-top:0.1rem">Transfer AED 225 before your session</div>
+              </div>
+              <div id="check-bank" style="width:20px;height:20px;border-radius:50%;border:1.5px solid #F2D8DE;flex-shrink:0"></div>
+            </div>
+            <div id="bank-details" style="display:none;margin-top:1rem;padding-top:1rem;border-top:1px solid #F2D8DE">
+              <div style="font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;color:#C87A8A;margin-bottom:0.6rem">Bank Details</div>
+              <div style="display:flex;flex-direction:column;gap:0.4rem;font-size:0.8rem">
+                <div style="display:flex;justify-content:space-between"><span style="color:#7A8FA8">Bank</span><span style="color:#1E2D4A;font-weight:500">Emirates NBD</span></div>
+                <div style="display:flex;justify-content:space-between"><span style="color:#7A8FA8">Account name</span><span style="color:#1E2D4A;font-weight:500">Layla S. Coaching</span></div>
+                <div style="display:flex;justify-content:space-between"><span style="color:#7A8FA8">IBAN</span><span style="color:#1E2D4A;font-weight:500;font-size:0.75rem">AE07 0331 2345 6789 0123 456</span></div>
+                <div style="display:flex;justify-content:space-between"><span style="color:#7A8FA8">Reference</span><span style="color:#1E2D4A;font-weight:500">GLIDE-LAYLA-0521</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Cash at Rink -->
+          <div id="pay-cash" class="pay-option" onclick="selectPayment('cash')"
+            style="border:1.5px solid #F2D8DE;border-radius:16px;padding:1.1rem 1.3rem;cursor:pointer;transition:all 0.2s;background:white">
+            <div style="display:flex;align-items:center;gap:0.8rem">
+              <div style="width:38px;height:38px;border-radius:50%;background:#F9EEF0;display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0">💵</div>
+              <div style="flex:1">
+                <div style="font-family:'DM Serif Display',serif;font-size:0.95rem;color:#1E2D4A">Cash at the Rink</div>
+                <div style="font-size:0.72rem;color:#7A8FA8;margin-top:0.1rem">Pay AED 225 in cash when you arrive</div>
+              </div>
+              <div id="check-cash" style="width:20px;height:20px;border-radius:50%;border:1.5px solid #F2D8DE;flex-shrink:0"></div>
+            </div>
+            <div id="cash-details" style="display:none;margin-top:1rem;padding-top:1rem;border-top:1px solid #F2D8DE">
+              <div style="font-size:0.78rem;color:#7A8FA8;line-height:1.65">
+                Please arrive 10 minutes early and bring exact change if possible. Let Layla know via WhatsApp that you've booked so she can prepare ♡
+              </div>
+              <div style="margin-top:0.6rem;font-size:0.78rem;color:#1E2D4A;font-weight:500" id="cash-phone-display">📱 Contact coach for details</div>
+            </div>
+          </div>
+
+          <!-- WhatsApp Pay -->
+          <div id="pay-whatsapp" class="pay-option" onclick="selectPayment('whatsapp')"
+            style="border:1.5px solid #F2D8DE;border-radius:16px;padding:1.1rem 1.3rem;cursor:pointer;transition:all 0.2s;background:white">
+            <div style="display:flex;align-items:center;gap:0.8rem">
+              <div style="width:38px;height:38px;border-radius:50%;background:#E8F5EF;display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0">💬</div>
+              <div style="flex:1">
+                <div style="font-family:'DM Serif Display',serif;font-size:0.95rem;color:#1E2D4A">Arrange via WhatsApp</div>
+                <div style="font-size:0.72rem;color:#7A8FA8;margin-top:0.1rem">Message Layla directly to arrange payment</div>
+              </div>
+              <div id="check-whatsapp" style="width:20px;height:20px;border-radius:50%;border:1.5px solid #F2D8DE;flex-shrink:0"></div>
+            </div>
+            <div id="whatsapp-details" style="display:none;margin-top:1rem;padding-top:1rem;border-top:1px solid #F2D8DE">
+              <div style="font-size:0.78rem;color:#7A8FA8;line-height:1.65;margin-bottom:0.6rem">
+                Send a WhatsApp message with your name and booking slot and they'll arrange payment details with you directly.
+              </div>
+              <a id="whatsapp-link" href="https://wa.me/971501234567?text=Hi!%20I%27d%20like%20to%20book%20a%20session%20%F0%9F%A9%B0"
+                target="_blank"
+                style="display:inline-block;background:#25D366;color:white;padding:0.5rem 1.2rem;border-radius:50px;font-size:0.75rem;letter-spacing:0.06em;text-transform:uppercase;text-decoration:none;font-family:'Jost',sans-serif;font-weight:500">
+                Open WhatsApp ↗
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:0.8rem">
+          <button onclick="backToDetails()"
+            style="flex:1;background:transparent;color:#1E2D4A;padding:0.8rem;border-radius:50px;font-size:0.78rem;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;border:1.5px solid #F2D8DE;font-family:'Jost',sans-serif">
+            ← Back
+          </button>
+          <button onclick="confirmBooking()"
+            style="flex:2;background:#1E2D4A;color:white;padding:0.8rem;border-radius:50px;font-size:0.82rem;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;border:none;font-family:'Jost',sans-serif;font-weight:500">
+            Confirm Booking 🩰
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 3: CONFIRMATION -->
+    <div id="booking-step-3" style="display:none;padding:3rem 2.5rem;text-align:center">
+      <div style="font-size:3rem;margin-bottom:1rem">🩰</div>
+      <div style="font-family:'DM Serif Display',serif;font-size:1.8rem;color:#1E2D4A;margin-bottom:0.3rem">You're booked! ♡</div>
+      <div style="font-family:'Caveat',cursive;font-size:1.1rem;color:#C87A8A;margin-bottom:1.5rem">see you on the ice ✦</div>
+
+      <div style="background:white;border:1px solid #F2D8DE;border-radius:16px;padding:1.2rem;margin-bottom:1.5rem;text-align:left">
+        <div style="font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;color:#C87A8A;font-weight:500;margin-bottom:0.8rem">Booking Confirmed ✦</div>
+        <div style="display:flex;flex-direction:column;gap:0.45rem;font-size:0.82rem">
+          <div style="display:flex;justify-content:space-between"><span style="color:#7A8FA8">Coach</span><span style="color:#1E2D4A;font-weight:500">Layla S.</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#7A8FA8">Date & time</span><span style="color:#1E2D4A;font-weight:500">Wed 21 May · 4:00 PM</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#7A8FA8">Location</span><span style="color:#1E2D4A;font-weight:500">Dubai Ice Rink</span></div>
+          <div style="height:1px;background:#F2D8DE;margin:0.3rem 0"></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#7A8FA8">Total due</span><span style="font-family:'DM Serif Display',serif;font-size:1.1rem;color:#1E2D4A">AED 225</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:#7A8FA8">Payment</span><span id="confirm-payment-method" style="color:#1E2D4A;font-weight:500">—</span></div>
+        </div>
+      </div>
+
+      <div id="confirm-payment-note" style="background:#F9EEF0;border:1px solid #E8B8C2;border-radius:12px;padding:1rem;font-size:0.8rem;color:#9A4F5F;line-height:1.7;margin-bottom:1.5rem;text-align:left"></div>
+
+      <div style="font-size:0.78rem;color:#7A8FA8;margin-bottom:1.5rem;line-height:1.65">
+        A confirmation has been sent to your email ♡<br>
+        Layla will reach out within 24 hours to confirm.
+      </div>
+
+      <button onclick="document.getElementById('booking-modal').style.display='none'"
+        style="width:100%;background:#1E2D4A;color:white;padding:0.85rem;border-radius:50px;font-size:0.82rem;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;border:none;font-family:'Jost',sans-serif;font-weight:500">
+        Done ✦
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<nav>
+  <div class="logo" onclick="showPage('home')">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><ellipse cx="10" cy="7" rx="4.5" ry="6" fill="#F2D8DE" stroke="#C87A8A" stroke-width="1"/><path d="M6.5 12 Q8.5 16 10 17 Q11.5 16 13.5 12" stroke="#C87A8A" stroke-width="1" fill="none" stroke-linecap="round"/><line x1="5" y1="18" x2="15" y2="18" stroke="#1E2D4A" stroke-width="1.5" stroke-linecap="round"/><line x1="6.5" y1="18" x2="5.5" y2="20" stroke="#1E2D4A" stroke-width="1" stroke-linecap="round"/></svg>
+    glideology
+  </div>
+  <ul class="nav-links">
+    <li><a id="nav-home" class="active" onclick="showPage('home')">Home</a></li>
+    <li><a id="nav-feedback" onclick="showPage('feedback')">Feedback</a></li>
+    <li><a id="nav-progress" onclick="showPage('progress')">Progress</a></li>
+    <li><a id="nav-marketplace" onclick="showPage('marketplace')">Marketplace</a></li>
+  </ul>
+  <div style="display:flex;align-items:center;gap:1rem">
+    <button id="nav-auth-btn" class="nav-pill" onclick="document.getElementById('auth-modal').style.display='flex'">Start for Free ♡</button>
+    <div class="avatar">N</div>
+  </div>
+</nav>
+
+<!-- ============================= HOME PAGE ============================= -->
+<div id="page-home" class="page-view active">
+  <section class="hero">
+    <div class="ice-lines"></div>
+    <div class="hero-glow"></div>
+    <svg style="position:absolute;inset:0;pointer-events:none;opacity:0.18;width:100%;height:100%" viewBox="0 0 900 600" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+      <path d="M100,200 Q200,180 350,220 Q500,260 650,240" stroke="#5BB8D4" stroke-width="1.5" fill="none"/>
+      <path d="M150,350 Q300,330 500,370 Q650,390 800,360" stroke="#5BB8D4" stroke-width="1" fill="none"/>
+      <path d="M50,450 Q150,430 300,460" stroke="#C87A8A" stroke-width="1.2" fill="none"/>
+      <ellipse cx="750" cy="300" rx="80" ry="40" stroke="#C87A8A" stroke-width="0.8" fill="none"/>
+      <ellipse cx="750" cy="300" rx="50" ry="25" stroke="#C87A8A" stroke-width="0.5" fill="none"/>
+    </svg>
+    <div class="hero-left">
+      <div class="hero-badge"><span class="dot"></span> AI-powered · figure skating · platform</div>
+      <div class="eyebrow">learn · practice · grow ✦</div>
+      <h1>Learning the art<br>of <em>figure skating</em></h1>
+      <span class="script">one edge at a time ♡</span>
+      <p class="hero-sub">Glideology uses AI to analyze your skating, give you real technique feedback, and connect you with coaches and services — wherever you are in the world.</p>
+      <div class="hero-actions">
+        <button class="btn-primary" onclick="showPage('feedback')">Upload Your Video 🩰</button>
+        <button class="btn-outline" onclick="showPage('marketplace')">Explore Marketplace</button>
+      </div>
+      <div class="trust"><span class="hearts">♡ ♡ ♡ ♡ ♡</span><span>built for skaters, by a skater</span></div>
+    </div>
+    <div class="hero-right">
+      <div class="hero-ring3"></div><div class="hero-ring"></div><div class="hero-ring2"></div>
+      <div class="rink-art">
+        <svg width="320" height="320" viewBox="0 0 320 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="160" cy="160" r="148" stroke="#E8B8C2" stroke-width="0.5" stroke-dasharray="4 6" opacity="0.5"/>
+          <ellipse cx="160" cy="160" rx="130" ry="90" stroke="#B8E4F4" stroke-width="1.2" opacity="0.6"/>
+          <path d="M160,160 C160,130 120,105 100,118 C80,131 80,169 100,182 C120,195 160,170 160,160 C160,150 200,125 220,138 C240,151 240,189 220,202 C200,215 160,190 160,160Z" stroke="#C87A8A" stroke-width="1.8" fill="none" opacity="0.7"/>
+          <path d="M160,160 C165,148 175,140 185,142 C200,146 205,162 198,172 C190,183 175,182 168,172 C162,164 165,152 172,148 C179,144 188,148 190,156" stroke="#E8B8C2" stroke-width="1.2" fill="none" opacity="0.8"/>
+          <path d="M110,128 C118,118 135,114 148,120" stroke="#C9A96E" stroke-width="1" fill="none" opacity="0.6" stroke-dasharray="3 3"/>
+          <path d="M172,200 C185,206 200,202 208,192" stroke="#C9A96E" stroke-width="1" fill="none" opacity="0.6" stroke-dasharray="3 3"/>
+          <path d="M80,145 C75,133 82,118 96,115 C110,112 120,122 118,136 C116,150 103,155 95,148 C87,141 88,130 96,127" stroke="#B8E4F4" stroke-width="1.4" fill="none" opacity="0.7"/>
+          <circle cx="225" cy="148" r="18" stroke="#E8B8C2" stroke-width="1" opacity="0.5"/>
+          <circle cx="225" cy="148" r="11" stroke="#E8B8C2" stroke-width="1" opacity="0.5"/>
+          <circle cx="225" cy="148" r="5" stroke="#C87A8A" stroke-width="1.2" opacity="0.7"/>
+          <circle cx="160" cy="160" r="3.5" fill="#C87A8A" opacity="0.8"/>
+          <circle cx="160" cy="160" r="7" stroke="#C87A8A" stroke-width="0.8" fill="none" opacity="0.4"/>
+          <text x="140" y="100" font-size="10" fill="#C87A8A" opacity="0.6" font-family="serif">✦</text>
+          <text x="240" y="200" font-size="8" fill="#C9A96E" opacity="0.5" font-family="serif">✦</text>
+          <text x="68" y="185" font-size="7" fill="#E8B8C2" opacity="0.6" font-family="serif">♡</text>
+          <g transform="translate(136,248) scale(0.7)">
+            <ellipse cx="16" cy="8" rx="8" ry="11" fill="#F2D8DE" stroke="#C87A8A" stroke-width="1.2"/>
+            <path d="M9 17 Q12 22 16 23 Q20 22 23 17" stroke="#C87A8A" stroke-width="1" fill="none" stroke-linecap="round"/>
+            <line x1="4" y1="25" x2="28" y2="25" stroke="#1E2D4A" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="23" cy="10" r="1.5" fill="#E8B8C2"/>
+          </g>
+        </svg>
+      </div>
+      <div class="fc fc-a"><div class="fc-tag">✦ AI Feedback</div><div class="fc-title">Axel Jump Analysis</div><div class="fc-body">Hip rotation is slightly early — engage your core a little longer for a cleaner edge ♡</div><div class="fc-bar"><div class="fc-fill" style="width:72%"></div></div><div class="fc-score"><span>Technique score</span><span>72 / 100</span></div></div>
+      <div class="fc fc-b"><div class="fc-tag">♡ Safety Reminder</div><div class="fc-title">Warm up first, always</div><div class="fc-body">Stretch ankles & knees before jumps. You're doing amazing!</div></div>
+      <div class="fc fc-c"><div class="fc-tag">✦ Marketplace</div><div class="fc-title">Coach Layla S.</div><div class="fc-body">Available Mon–Thu · Dubai</div><div style="margin-top:0.5rem;font-size:0.68rem;color:#C87A8A;font-weight:500">★★★★★ · 48 sessions</div></div>
+      <div class="fc fc-d"><div class="fc-tag">Progress ✦</div><div class="fc-title">+14 pts this week!</div><div class="fc-body">Your best week yet 🩰</div></div>
+    </div>
+  </section>
+
+  <div class="blade-divider">
+    <div class="item"><span class="sym">🩰</span> jumps & spins</div>
+    <div class="item"><span class="sym">✦</span> AI analysis</div>
+    <div class="item"><span class="sym">🩰</span> technique feedback</div>
+    <div class="item"><span class="sym">✦</span> safety reminders</div>
+    <div class="item"><span class="sym">🩰</span> skating marketplace</div>
+    <div class="item"><span class="sym">✦</span> progress tracking</div>
+  </div>
+
+  <section class="elements-section">
+    <span class="sec-label">what glideology can analyze ✦</span>
+    <h2>Every element, <em>covered</em></h2>
+    <div class="hdiv">♡</div>
+    <p class="sec-sub">From your very first forward glide to competition-level jumps — feedback on the elements that matter most to your journey.</p>
+    <div class="elements-grid">
+      <div class="epill-home"><span class="eicon">🌀</span><div class="ename">Axel</div><div class="elevel">Jump · Advanced</div></div>
+      <div class="epill-home"><span class="eicon">💫</span><div class="ename">Lutz</div><div class="elevel">Jump · Advanced</div></div>
+      <div class="epill-home"><span class="eicon">✨</span><div class="ename">Flip</div><div class="elevel">Jump · Intermediate</div></div>
+      <div class="epill-home"><span class="eicon">⭐</span><div class="ename">Salchow</div><div class="elevel">Jump · Beginner</div></div>
+      <div class="epill-home"><span class="eicon">🌸</span><div class="ename">Toe Loop</div><div class="elevel">Jump · Beginner</div></div>
+      <div class="epill-home"><span class="eicon">🩰</span><div class="ename">Layback Spin</div><div class="elevel">Spin · Intermediate</div></div>
+      <div class="epill-home"><span class="eicon">💝</span><div class="ename">Camel Spin</div><div class="elevel">Spin · Intermediate</div></div>
+      <div class="epill-home"><span class="eicon">🎀</span><div class="ename">Biellmann</div><div class="elevel">Spin · Advanced</div></div>
+      <div class="epill-home"><span class="eicon">🌊</span><div class="ename">Footwork</div><div class="elevel">Sequence · All levels</div></div>
+      <div class="epill-home"><span class="eicon">🪩</span><div class="ename">Spiral</div><div class="elevel">Move · All levels</div></div>
+    </div>
+  </section>
+
+  <section class="features-section">
+    <span class="sec-label">what glideology offers ♡</span>
+    <h2>Everything a skater<br><em>actually needs</em></h2>
+    <div class="hdiv">♡</div>
+    <p class="sec-sub">Built for beginners finding their footing and skaters chasing their next big jump — all levels, all goals, all welcome.</p>
+    <div class="fgrid">
+      <div class="fcard"><span class="ftag">Core</span><div class="ficon">🎥</div><div class="fname">Video Upload & Analysis</div><div class="fdesc">Film at the rink, upload instantly, and get a frame-by-frame breakdown of posture, edge quality, timing, and jump mechanics.</div></div>
+      <div class="fcard"><span class="ftag">AI-Powered</span><div class="ficon">🤖</div><div class="fname">AI Technique Feedback</div><div class="fdesc">Clear, kind corrections for jumps, spins, and footwork — in plain language with visual diagrams so you truly understand what to fix.</div></div>
+      <div class="fcard"><span class="ftag">Growth</span><div class="ficon">📈</div><div class="fname">Progress Tracking</div><div class="fdesc">Watch your scores grow session by session, celebrate milestones, and see exactly how far you've come since day one.</div></div>
+      <div class="fcard"><span class="ftag">Wellness</span><div class="ficon">🩹</div><div class="fname">Safety & Wellness Advice</div><div class="fdesc">Warm-up reminders, fall prevention, and recovery guidance — skate smart, stay healthy, keep the love for skating alive.</div></div>
+      <div class="fcard"><span class="ftag">Visual</span><div class="ficon">🗺️</div><div class="fname">Visual Guides & Diagrams</div><div class="fdesc">Illustrated breakdowns of edge transitions, spin positions, and jump take-off angles — study your craft even off the ice.</div></div>
+      <div class="fcard"><span class="ftag">Community</span><div class="ficon">🛍️</div><div class="fname">Skating Marketplace</div><div class="fdesc">Find and book coaches, blade sharpeners, technicians, and skating partners — all in one searchable, bookable place.</div></div>
+    </div>
+  </section>
+
+  <section class="how-section">
+    <div class="how-ice"></div>
+    <span class="sec-label">the process ✦</span>
+    <h2>From ice to <em>insight</em> in four steps</h2>
+    <p class="sec-sub">No complicated setup — just upload, analyze, and improve at your own pace.</p>
+    <div class="steps">
+      <div class="step"><span class="sstep">🩰</span><div class="snum">01</div><div class="stitle">Create your profile</div><div class="sdesc">Tell us your level, goals, and what elements you're working on. Glideology tailors everything to you.</div></div>
+      <div class="step"><span class="sstep">🎥</span><div class="snum">02</div><div class="stitle">Upload your video</div><div class="sdesc">Film yourself at the rink with any phone. Upload any angle, any element — we work with what you've got.</div></div>
+      <div class="step"><span class="sstep">✨</span><div class="snum">03</div><div class="stitle">Receive AI feedback</div><div class="sdesc">In seconds, get a full breakdown of what's working, what to correct, and how to improve with visual guides.</div></div>
+      <div class="step"><span class="sstep">🌸</span><div class="snum">04</div><div class="stitle">Connect & grow</div><div class="sdesc">Use the marketplace to find coaches and services, track your progress, and push toward your next milestone.</div></div>
+    </div>
+  </section>
+
+  <section class="levels-section">
+    <span class="sec-label">for every skater ♡</span>
+    <h2>Whatever your level,<br><em>you belong here</em></h2>
+    <div class="hdiv">♡</div>
+    <div class="lgrid">
+      <div class="lcard"><span class="licon">🌸</span><div class="lname">Beginner</div><span class="lscript">just starting out</span><ul class="llist"><li>Basic edge & balance feedback</li><li>Step-by-step visual guides</li><li>Warm-up & safety tips</li><li>Beginner-friendly coaches</li></ul></div>
+      <div class="lcard feat"><span class="licon">🩰</span><div class="lname">Intermediate</div><span class="lscript">building your skills</span><ul class="llist"><li>Jump & spin technique analysis</li><li>Detailed AI corrections</li><li>Progress tracking & scoring</li><li>Specialist coaches & partners</li></ul></div>
+      <div class="lcard"><span class="licon">✦</span><div class="lname">Competitive</div><span class="lscript">chasing excellence</span><ul class="llist"><li>Competition-level analysis</li><li>Element-by-element scoring</li><li>Performance history & trends</li><li>Elite coaches & technicians</li></ul></div>
+    </div>
+  </section>
+
+  <section class="market-section">
+    <div class="minner">
+      <div>
+        <span class="sec-label">the marketplace ✦</span>
+        <h2>Your whole skating<br><em>community</em>, connected</h2>
+        <div class="hdiv">♡</div>
+        <p class="sec-sub">Finding skating support — especially in places like the Middle East where the sport is growing — can be really hard. Glideology brings everything together so you never skate alone.</p>
+        <div style="margin-top:1.5rem;display:flex;flex-direction:column;gap:0.65rem">
+          <div style="display:flex;align-items:center;gap:0.6rem;font-size:0.85rem;color:#4A5F7A"><span style="color:#C87A8A">🩰</span> Verified coaches & instructors</div>
+          <div style="display:flex;align-items:center;gap:0.6rem;font-size:0.85rem;color:#4A5F7A"><span style="color:#C87A8A">🩰</span> Blade sharpening & skate fitting</div>
+          <div style="display:flex;align-items:center;gap:0.6rem;font-size:0.85rem;color:#4A5F7A"><span style="color:#C87A8A">🩰</span> Pairs & ice dance partner matching</div>
+          <div style="display:flex;align-items:center;gap:0.6rem;font-size:0.85rem;color:#4A5F7A"><span style="color:#C87A8A">🩰</span> Ice time sharing & rink listings</div>
+        </div>
+        <div style="margin-top:2rem"><button class="btn-primary" onclick="showPage('marketplace')">Explore the Marketplace 🩰</button></div>
+      </div>
+      <div class="mgrid">
+        <div class="mcard pink"><span class="micon">👩‍🏫</span><div class="mname">Coaches</div><div class="msub">Private & group lessons at every level</div></div>
+        <div class="mcard"><span class="micon">🔧</span><div class="mname">Technicians</div><div class="msub">Blade sharpening & boot fitting</div></div>
+        <div class="mcard"><span class="micon">🤝</span><div class="mname">Partners</div><div class="msub">Find pairs & ice dance partners</div></div>
+        <div class="mcard pink"><span class="micon">🏒</span><div class="mname">Ice Time</div><div class="msub">Book rink sessions near you</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta-section">
+    <div class="cta-ring"></div><div class="cta-ring2"></div>
+    <div class="cta-badge">🩰 made for every skater, everywhere ♡</div>
+    <h2>Your skating journey<br><em>deserves real support</em></h2>
+    <span class="cta-script">build confidence · enjoy the process ♡</span>
+    <p>Whether you're stepping on ice for the first time or training for competition, Glideology gives you the tools, feedback, and community to grow — no matter where in the world you skate.</p>
+    <button class="btn-primary" style="font-size:0.88rem;padding:1rem 2.5rem;position:relative;z-index:1" onclick="showPage('feedback')">Get Started with Glideology 🩰</button>
+  </section>
+
+  <footer>
+    <div><div class="flogo">glideology ✦</div><div class="ftagline">one edge at a time ♡</div></div>
+    <div class="flinks"><a onclick="showPage('home')">home</a><a onclick="showPage('feedback')">feedback</a><a onclick="showPage('progress')">progress</a><a onclick="showPage('marketplace')">marketplace</a></div>
+    <div class="fmyp">MYP Personal Project · 2025–26</div>
+  </footer>
+</div>
+
+<!-- ============================= FEEDBACK PAGE ============================= -->
+<div id="page-feedback" class="page-view">
+  <div class="inner-page">
+
+    <!-- HEADER -->
+    <div style="margin-bottom:2.5rem">
+      <div class="page-eyebrow">AI Video Analysis ✦</div>
+      <div class="page-h1">Get your <em>technique feedback</em></div>
+      <p class="page-sub-text">Upload a video of your skating and our AI will analyze it in seconds ♡</p>
+    </div>
+
+    <!-- STEP 1: UPLOAD STATE (shown by default) -->
+    <div id="feedback-upload-state">
+
+      <!-- ELEMENT PICKER -->
+      <div class="element-select-section">
+        <div class="section-title">What element are you working on? ♡</div>
+        <div class="element-pills">
+          <div class="epill" onclick="selectElement(this)">🌀 Axel</div>
+          <div class="epill" onclick="selectElement(this)">💫 Lutz</div>
+          <div class="epill" onclick="selectElement(this)">✨ Flip</div>
+          <div class="epill" onclick="selectElement(this)">⭐ Salchow</div>
+          <div class="epill" onclick="selectElement(this)">🌸 Toe Loop</div>
+          <div class="epill" onclick="selectElement(this)">🩰 Layback Spin</div>
+          <div class="epill" onclick="selectElement(this)">💝 Camel Spin</div>
+          <div class="epill" onclick="selectElement(this)">🌊 Footwork</div>
+          <div class="epill" onclick="selectElement(this)">🪩 Spiral</div>
+          <div class="epill other-pill" id="other-pill" onclick="toggleOther(this)">✏️ Other</div>
+        </div>
+        <div class="other-input-wrap" id="other-input-wrap">
+          <input class="other-input" id="other-input" type="text" placeholder="e.g. Ina Bauer, death spiral, shoot the duck...">
+          <span class="other-hint">♡ we'll do our best to help!</span>
+        </div>
+      </div>
+
+      <!-- UPLOAD BOX -->
+      <div id="upload-area"
+        onclick="document.getElementById('video-file-input').click()"
+        style="border:2px dashed #E8B8C2;border-radius:24px;background:white;padding:5rem 2rem;text-align:center;cursor:pointer;transition:all 0.2s;margin-top:0.5rem"
+        onmouseover="this.style.background='#F9EEF0';this.style.borderColor='#C87A8A'"
+        onmouseout="this.style.background='white';this.style.borderColor='#E8B8C2'">
+
+        <!-- rink trace SVG decoration -->
+        <div style="margin:0 auto 1.5rem;opacity:0.35;width:100px">
+          <svg viewBox="0 0 100 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <ellipse cx="50" cy="30" rx="46" ry="26" stroke="#C87A8A" stroke-width="1"/>
+            <path d="M50,30 C50,20 38,13 32,17 C26,21 26,39 32,43 C38,47 50,38 50,30 C50,22 62,15 68,19 C74,23 74,41 68,45 C62,49 50,40 50,30Z" stroke="#C87A8A" stroke-width="1.2" fill="none"/>
+            <circle cx="50" cy="30" r="3" fill="#C87A8A"/>
+            <circle cx="50" cy="30" r="6" stroke="#C87A8A" stroke-width="0.6" fill="none"/>
+          </svg>
+        </div>
+
+        <div style="font-family:'DM Serif Display',serif;font-size:1.6rem;color:#1E2D4A;margin-bottom:0.5rem">Upload your skating video</div>
+        <div style="font-family:'Caveat',cursive;font-size:1rem;color:#C87A8A;margin-bottom:1.2rem">one upload away from real feedback ♡</div>
+        <div style="font-size:0.82rem;color:#7A8FA8;margin-bottom:2rem;line-height:1.7">
+          Any phone camera works · MP4, MOV or AVI · Max 100MB<br>
+          Film from the side or front for the best analysis ✦
+        </div>
+
+        <button style="background:#1E2D4A;color:white;padding:0.9rem 2.5rem;border-radius:50px;font-size:0.82rem;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;border:none;font-family:'Jost',sans-serif;font-weight:500;pointer-events:none">
+          Choose Video 🩰
+        </button>
+        <div style="font-size:0.72rem;color:#C0CFDA;margin-top:1rem">or drag & drop your file here</div>
+
+        <input type="file" id="video-file-input" accept="video/*" style="display:none" onchange="handleVideoUpload(this)">
+      </div>
+
+      <!-- TIPS ROW -->
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-top:1.5rem">
+        <div style="background:white;border:1px solid #F2D8DE;border-radius:16px;padding:1.2rem;text-align:center">
+          <div style="font-size:1.3rem;margin-bottom:0.5rem">📱</div>
+          <div style="font-family:'DM Serif Display',serif;font-size:0.9rem;color:#1E2D4A;margin-bottom:0.3rem">Any camera works</div>
+          <div style="font-size:0.75rem;color:#7A8FA8;line-height:1.6">Your phone camera is perfect — no special equipment needed ♡</div>
+        </div>
+        <div style="background:white;border:1px solid #F2D8DE;border-radius:16px;padding:1.2rem;text-align:center">
+          <div style="font-size:1.3rem;margin-bottom:0.5rem">🎯</div>
+          <div style="font-family:'DM Serif Display',serif;font-size:0.9rem;color:#1E2D4A;margin-bottom:0.3rem">Film from the side</div>
+          <div style="font-size:0.75rem;color:#7A8FA8;line-height:1.6">A side angle captures jumps and spins most clearly ✦</div>
+        </div>
+        <div style="background:white;border:1px solid #F2D8DE;border-radius:16px;padding:1.2rem;text-align:center">
+          <div style="font-size:1.3rem;margin-bottom:0.5rem">🔁</div>
+          <div style="font-family:'DM Serif Display',serif;font-size:0.9rem;color:#1E2D4A;margin-bottom:0.3rem">One element at a time</div>
+          <div style="font-size:0.75rem;color:#7A8FA8;line-height:1.6">Upload separate videos for each element for the best feedback ♡</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 2: PROGRESS BAR (shown during upload/analysis) -->
+    <div id="upload-progress" style="display:none;padding:5rem 2rem;text-align:center;background:white;border:1px solid #F2D8DE;border-radius:24px">
+      <div style="font-size:2.5rem;margin-bottom:1.5rem" id="upload-emoji">🎥</div>
+      <div style="font-family:'DM Serif Display',serif;font-size:1.4rem;color:#1E2D4A;margin-bottom:0.4rem" id="upload-status">Uploading your video... ♡</div>
+      <div style="font-family:'Caveat',cursive;font-size:0.95rem;color:#C87A8A;margin-bottom:2rem">this only takes a moment ✦</div>
+      <div style="max-width:400px;margin:0 auto">
+        <div style="background:#F2D8DE;height:6px;border-radius:3px;overflow:hidden">
+          <div id="progress-bar" style="background:linear-gradient(90deg,#C87A8A,#E8B8C2);height:100%;width:0%;border-radius:3px;transition:width 0.4s ease"></div>
+        </div>
+        <div id="progress-pct" style="font-size:0.72rem;color:#7A8FA8;margin-top:0.5rem">0%</div>
+      </div>
+    </div>
+
+    <!-- STEP 3: RESULTS (hidden until feedback loads) -->
+    <div class="results-grid" style="display:none">
+      <div>
+        <div class="video-panel">
+          <div class="video-placeholder">
+            <div class="video-play">▶</div>
+            <div class="video-label">Uploaded</div>
+            <div class="video-title-label">your_video.mp4</div>
+            <div class="frame-marker fm1"><div class="fm-label">Hip rotation</div></div>
+            <div class="frame-marker fm2"><div class="fm-label">Edge quality</div></div>
+          </div>
+          <div class="timeline">
+            <div class="scrubber-track"><div class="scrubber-fill"></div><div class="scrubber-dot"></div></div>
+            <div class="time-labels"><span>0:00</span><span>—</span><span>—</span></div>
+          </div>
+        </div>
+        <div class="bottom-stats">
+          <div class="stat-mini"><div class="stat-mini-num score-big-mini">—</div><div class="stat-mini-label">Overall score</div><div class="stat-mini-change">AI analyzed ✦</div></div>
+          <div class="stat-mini"><div class="stat-mini-num" id="fix-count">—</div><div class="stat-mini-label">Things to fix</div><div class="stat-mini-change" style="color:var(--gold)">see below ♡</div></div>
+          <div class="stat-mini"><div class="stat-mini-num" id="good-count">—</div><div class="stat-mini-label">Looking great!</div><div class="stat-mini-change">keep it up ✦</div></div>
+        </div>
+        <div class="btn-row">
+          <button class="btn-secondary" onclick="resetFeedback()">Upload New Video</button>
+          <button class="btn-primary" onclick="showPage('progress')">Save to Progress 🩰</button>
+        </div>
+      </div>
+
+      <div class="feedback-panel">
+        <div class="score-card">
+          <div class="score-header">
+            <div><div class="score-label-sm">Overall Technique Score</div><div class="score-big">—<span class="score-suffix">/100</span></div></div>
+            <div class="score-badge">AI Feedback ✦</div>
+          </div>
+          <div class="score-bars">
+            <div class="bar-row"><div class="bar-name">Entry edge</div><div class="bar-track"><div class="bar-fill" style="width:0%"></div></div><div class="bar-val">—</div></div>
+            <div class="bar-row"><div class="bar-name">Hip rotation</div><div class="bar-track"><div class="bar-fill" style="width:0%"></div></div><div class="bar-val">—</div></div>
+            <div class="bar-row"><div class="bar-name">Air position</div><div class="bar-track"><div class="bar-fill" style="width:0%"></div></div><div class="bar-val">—</div></div>
+            <div class="bar-row"><div class="bar-name">Landing edge</div><div class="bar-track"><div class="bar-fill" style="width:0%"></div></div><div class="bar-val">—</div></div>
+            <div class="bar-row"><div class="bar-name">Flow out</div><div class="bar-track"><div class="bar-fill" style="width:0%"></div></div><div class="bar-val">—</div></div>
+          </div>
+        </div>
+        <div class="safety-card">
+          <div class="safety-top"><span style="font-size:1.1rem">🩹</span><div class="safety-title">Safety & Wellness Note</div></div>
+          <div class="safety-body">Your feedback will appear here once the AI finishes analyzing ♡</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ============================= PROGRESS PAGE ============================= -->
+<div id="page-progress" class="page-view">
+  <div class="inner-page">
+
+    <!-- NOT LOGGED IN STATE -->
+    <div id="progress-logged-out" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh;text-align:center;padding:3rem 2rem">
+      <div style="font-size:3rem;margin-bottom:1rem">🩰</div>
+      <div style="font-family:'DM Serif Display',serif;font-size:2rem;color:#1E2D4A;margin-bottom:0.4rem">Your progress lives here ♡</div>
+      <div style="font-family:'Caveat',cursive;font-size:1.1rem;color:#C87A8A;margin-bottom:1rem">sign in to see your journey ✦</div>
+      <p style="font-size:0.9rem;color:#7A8FA8;max-width:380px;line-height:1.85;font-weight:300;margin-bottom:2rem">Create a free account to track your sessions, see your scores improve over time, and celebrate every milestone on the ice.</p>
+      <button onclick="document.getElementById('auth-modal').style.display='flex'"
+        style="background:#1E2D4A;color:white;padding:0.9rem 2.2rem;border-radius:50px;font-size:0.82rem;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;border:none;font-family:'Jost',sans-serif;font-weight:500">
+        Create Free Account 🩰
+      </button>
+    </div>
+
+    <!-- LOGGED IN — NO SESSIONS YET -->
+    <div id="progress-empty" style="display:none">
+      <div class="profile-hero-bar">
+        <div class="ph-avatar">🩰</div>
+        <div>
+          <div class="ph-name" id="prog-name">Skater</div>
+          <span class="ph-script">one edge at a time ♡</span>
+          <div class="ph-tags">
+            <span class="ptag" id="prog-email-tag">✦ Welcome to Glideology</span>
+            <span class="ptag">🌱 Just getting started</span>
+          </div>
+        </div>
+        <div class="ph-level">
+          <div class="level-label">Current level</div>
+          <div class="level-name-big">Beginner</div>
+          <div class="level-since">Just joined ♡</div>
+        </div>
+      </div>
+
+      <!-- EMPTY STATE CONTENT -->
+      <div style="background:white;border:1px solid #F2D8DE;border-radius:24px;padding:4rem 3rem;text-align:center;margin-bottom:1.5rem">
+        <div style="font-size:2.5rem;margin-bottom:1rem">🎥</div>
+        <div style="font-family:'DM Serif Display',serif;font-size:1.6rem;color:#1E2D4A;margin-bottom:0.4rem">No sessions yet ♡</div>
+        <div style="font-family:'Caveat',cursive;font-size:1rem;color:#C87A8A;margin-bottom:1rem">your journey starts with one upload ✦</div>
+        <p style="font-size:0.88rem;color:#7A8FA8;max-width:400px;margin:0 auto 2rem;line-height:1.85;font-weight:300">Upload your first skating video and Glideology's AI will analyze your technique, give you a score, and track your progress every session from here.</p>
+        <button onclick="showPage('feedback')"
+          style="background:#1E2D4A;color:white;padding:0.85rem 2rem;border-radius:50px;font-size:0.82rem;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;border:none;font-family:'Jost',sans-serif;font-weight:500">
+          Upload Your First Video 🩰
+        </button>
+      </div>
+
+      <!-- EMPTY GOALS CARD -->
+      <div style="background:white;border:1px solid #F2D8DE;border-radius:20px;padding:2rem">
+        <div class="card-title-serif" style="margin-bottom:1rem">Your goals ♡</div>
+        <div style="text-align:center;padding:2rem 1rem;color:#7A8FA8">
+          <div style="font-size:1.5rem;margin-bottom:0.6rem">🌸</div>
+          <div style="font-size:0.85rem;line-height:1.7">Goals will appear here once you start uploading sessions.<br>
+          <span style="font-family:'Caveat',cursive;color:#C87A8A;font-size:0.95rem">every skater starts somewhere ♡</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LOGGED IN — HAS SESSIONS -->
+    <div id="progress-full" style="display:none">
+      <div class="profile-hero-bar">
+        <div class="ph-avatar">🩰</div>
+        <div>
+          <div class="ph-name" id="prog-name-full">Skater</div>
+          <span class="ph-script">one edge at a time ♡</span>
+          <div class="ph-tags">
+            <span class="ptag" id="prog-sessions-tag">✦ 0 sessions logged</span>
+            <span class="ptag" id="prog-element-tag">🎀 Keep skating!</span>
+          </div>
+        </div>
+        <div class="ph-level">
+          <div class="level-label">Current level</div>
+          <div class="level-name-big" id="prog-level">Beginner</div>
+          <div class="level-since" id="prog-joined">Just joined</div>
+        </div>
+      </div>
+
+      <div class="stats-row-4">
+        <div class="stat-card highlight"><span class="stat-icon-big">📈</span><div class="stat-num-big" id="prog-best">—</div><div class="stat-label-sm">Best score ever</div><div class="stat-delta" id="prog-best-sub">Upload a video to start ♡</div></div>
+        <div class="stat-card"><span class="stat-icon-big">🎥</span><div class="stat-num-big" id="prog-count">0</div><div class="stat-label-sm">Sessions logged</div><div class="stat-delta">Keep going! ✦</div></div>
+        <div class="stat-card"><span class="stat-icon-big">✨</span><div class="stat-num-big" id="prog-elements">0</div><div class="stat-label-sm">Elements tracked</div><div class="stat-delta" id="prog-elements-sub">—</div></div>
+        <div class="stat-card"><span class="stat-icon-big">🔥</span><div class="stat-num-big" id="prog-streak">0</div><div class="stat-label-sm">Week streak</div><div class="stat-delta">Keep it up! ♡</div></div>
+      </div>
+
+      <div class="main-grid-2col">
+        <div class="chart-card">
+          <div class="card-header-row">
+            <div><div class="card-title-serif">Score progress over time</div><div class="card-script-sm" id="prog-chart-sub">upload more sessions to see your curve ♡</div></div>
+          </div>
+          <div id="prog-chart-area">
+            <div style="height:180px;display:flex;align-items:center;justify-content:center;color:#7A8FA8;font-size:0.85rem;flex-direction:column;gap:0.5rem">
+              <span style="font-size:1.5rem">📊</span>
+              <span>Your chart will appear after a few sessions ✦</span>
+            </div>
+          </div>
+        </div>
+        <div class="mastery-card">
+          <div class="card-header-row"><div class="card-title-serif">Element mastery ♡</div></div>
+          <div id="prog-mastery-list" class="mastery-list">
+            <div style="text-align:center;padding:2rem 0;color:#7A8FA8;font-size:0.82rem">
+              <div style="font-size:1.2rem;margin-bottom:0.4rem">🩰</div>
+              Elements you've uploaded will appear here ♡
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bottom-grid-2col">
+        <div class="sessions-card">
+          <div class="card-title-serif">Recent sessions ✦</div>
+          <div id="prog-sessions-list" class="session-list">
+            <div style="text-align:center;padding:2rem;color:#7A8FA8;font-size:0.82rem">No sessions yet — upload your first video! 🎥</div>
+          </div>
+        </div>
+        <div class="goals-card">
+          <div class="card-title-serif">Your goals ♡</div>
+          <div class="goals-list">
+            <div class="goal-item active-goal"><div class="goal-check gc-active"></div><div><div class="goal-text">Upload your first skating video</div><div class="goal-script">the journey begins here ✦</div></div></div>
+            <div class="goal-item active-goal"><div class="goal-check gc-active"></div><div><div class="goal-text">Score above 70 on any element</div><div class="goal-script">you'll get there ♡</div></div></div>
+            <div class="goal-item active-goal"><div class="goal-check gc-active"></div><div><div class="goal-text">Complete 5 sessions</div><div class="goal-script">consistency is everything ✦</div></div></div>
+            <div class="goal-item active-goal"><div class="goal-check gc-active"></div><div><div class="goal-text">Try a new element</div><div class="goal-script">challenge yourself ♡</div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ============================= MARKETPLACE PAGE ============================= -->
+<div id="page-marketplace" class="page-view">
+  <div class="inner-page">
+
+    <!-- LOGIN WALL — shown when not logged in -->
+    <div id="market-login-wall" style="min-height:80vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:4rem 2rem">
+      <div style="position:relative;margin-bottom:2rem">
+        <svg width="280" height="160" viewBox="0 0 280 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <ellipse cx="140" cy="80" rx="120" ry="70" stroke="#E8B8C2" stroke-width="1" stroke-dasharray="4 5" opacity="0.5"/>
+          <ellipse cx="140" cy="80" rx="80" ry="46" stroke="#E8B8C2" stroke-width="0.8" opacity="0.4"/>
+          <path d="M140,80 C140,62 118,50 106,56 C94,62 94,78 106,84 C118,90 140,78 140,80 C140,72 162,60 174,66 C186,72 186,88 174,94 C162,100 140,88 140,80Z" stroke="#C87A8A" stroke-width="1.5" fill="none" opacity="0.6"/>
+          <circle cx="140" cy="80" r="4" fill="#C87A8A" opacity="0.7"/>
+          <text x="120" y="42" font-size="9" fill="#C87A8A" opacity="0.5" font-family="serif">✦</text>
+          <text x="158" y="118" font-size="8" fill="#C9A96E" opacity="0.5" font-family="serif">♡</text>
+          <g transform="translate(124,110) scale(0.65)">
+            <ellipse cx="16" cy="8" rx="8" ry="11" fill="#F2D8DE" stroke="#C87A8A" stroke-width="1.2"/>
+            <path d="M9 17 Q12 22 16 23 Q20 22 23 17" stroke="#C87A8A" stroke-width="1" fill="none" stroke-linecap="round"/>
+            <line x1="4" y1="25" x2="28" y2="25" stroke="#1E2D4A" stroke-width="2" stroke-linecap="round"/>
+            <line x1="4" y1="25" x2="2" y2="28" stroke="#1E2D4A" stroke-width="1.5" stroke-linecap="round"/>
+          </g>
+        </svg>
+      </div>
+      <div style="font-family:'Caveat',cursive;font-size:1.1rem;color:#C87A8A;margin-bottom:0.5rem">coaches, partners & more ✦</div>
+      <div style="font-family:'DM Serif Display',serif;font-size:2.4rem;color:#1E2D4A;line-height:1.15;margin-bottom:0.8rem">The Skating <em style="font-style:italic;color:#C87A8A">Marketplace</em><br>is members only ♡</div>
+      <p style="font-size:0.92rem;color:#7A8FA8;max-width:400px;line-height:1.85;font-weight:300;margin-bottom:2rem">Create a free Glideology account to browse coaches, find skating partners, book ice time, and connect with the skating community across the UAE.</p>
+      <div style="display:flex;gap:1rem;flex-wrap:wrap;justify-content:center">
+        <button onclick="document.getElementById('auth-modal').style.display='flex'"
+          style="background:#1E2D4A;color:white;padding:0.9rem 2.2rem;border-radius:50px;font-size:0.82rem;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;border:none;font-family:'Jost',sans-serif;font-weight:500">
+          Create Free Account 🩰
+        </button>
+        <button onclick="document.getElementById('auth-modal').style.display='flex'"
+          style="background:transparent;color:#1E2D4A;padding:0.9rem 1.8rem;border-radius:50px;font-size:0.8rem;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;border:1.5px solid #E8B8C2;font-family:'Jost',sans-serif">
+          Log In
+        </button>
+      </div>
+      <!-- blurred preview cards -->
+      <div style="margin-top:3rem;position:relative;width:100%;max-width:780px">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;filter:blur(6px);opacity:0.4;pointer-events:none;user-select:none">
+          <div style="background:white;border:1px solid #F2D8DE;border-radius:16px;padding:1.2rem">
+            <div style="height:60px;background:linear-gradient(135deg,#F2D8DE,#E8B8C2);border-radius:10px;margin-bottom:0.8rem;display:flex;align-items:center;justify-content:center;font-size:1.5rem">👩‍🏫</div>
+            <div style="height:10px;background:#F2D8DE;border-radius:5px;margin-bottom:0.4rem"></div>
+            <div style="height:8px;background:#F9EEF0;border-radius:5px;width:70%;margin-bottom:0.8rem"></div>
+            <div style="height:6px;background:#F9EEF0;border-radius:5px;width:50%"></div>
+          </div>
+          <div style="background:white;border:1px solid #F2D8DE;border-radius:16px;padding:1.2rem">
+            <div style="height:60px;background:linear-gradient(135deg,#EAF4F8,#B8E4F4);border-radius:10px;margin-bottom:0.8rem;display:flex;align-items:center;justify-content:center;font-size:1.5rem">🔧</div>
+            <div style="height:10px;background:#F2D8DE;border-radius:5px;margin-bottom:0.4rem"></div>
+            <div style="height:8px;background:#F9EEF0;border-radius:5px;width:60%;margin-bottom:0.8rem"></div>
+            <div style="height:6px;background:#F9EEF0;border-radius:5px;width:45%"></div>
+          </div>
+          <div style="background:white;border:1px solid #F2D8DE;border-radius:16px;padding:1.2rem">
+            <div style="height:60px;background:linear-gradient(135deg,#F9EEF0,#F2D8DE);border-radius:10px;margin-bottom:0.8rem;display:flex;align-items:center;justify-content:center;font-size:1.5rem">🤝</div>
+            <div style="height:10px;background:#F2D8DE;border-radius:5px;margin-bottom:0.4rem"></div>
+            <div style="height:8px;background:#F9EEF0;border-radius:5px;width:75%;margin-bottom:0.8rem"></div>
+            <div style="height:6px;background:#F9EEF0;border-radius:5px;width:40%"></div>
+          </div>
+        </div>
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+          <div style="background:white;border:1px solid #E8B8C2;border-radius:50px;padding:0.5rem 1.2rem;font-size:0.75rem;color:#C87A8A;letter-spacing:0.08em;text-transform:uppercase;font-family:'Jost',sans-serif;font-weight:500;box-shadow:0 4px 16px rgba(200,122,138,0.15)">
+            🔒 Sign in to unlock
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- REAL MARKETPLACE — shown when logged in -->
+    <div id="market-content" style="display:none">
+      <div class="market-header-band">
+        <div><div class="mh-eyebrow">find your people ♡</div><div class="mh-title">The Skating <em>Marketplace</em></div><div class="mh-sub">Coaches, technicians, partners & ice time — all in one place</div></div>
+        <div class="mh-stats">
+          <div class="mhs"><div class="mhs-num" id="stat-coaches">—</div><div class="mhs-label">Coaches</div></div>
+          <div class="mhs"><div class="mhs-num" id="stat-tech">—</div><div class="mhs-label">Technicians</div></div>
+          <div class="mhs"><div class="mhs-num" id="stat-partners">—</div><div class="mhs-label">Partners</div></div>
+          <div class="mhs"><div class="mhs-num" id="stat-rinks">—</div><div class="mhs-label">Rinks</div></div>
+        </div>
+      </div>
+
+      <div class="search-row">
+        <div class="search-box"><span>🔍</span><input id="market-search" type="text" placeholder="Search coaches, services, locations..." oninput="filterListings()"></div>
+        <div class="filter-row">
+          <div class="filter-btn active" onclick="setLocationFilter('dubai', this)">📍 Dubai</div>
+          <div class="filter-btn" onclick="setLocationFilter('all', this)">🌍 All UAE</div>
+        </div>
+        <select class="sort-select" onchange="sortListings(this.value)">
+          <option value="newest">Sort: Newest</option>
+          <option value="name">Sort: Name A–Z</option>
+        </select>
+      </div>
+
+      <div class="cat-tabs">
+        <div class="cat-tab active" onclick="filterByType('all', this)">✦ All <span class="cat-count" id="tab-all">0</span></div>
+        <div class="cat-tab" onclick="filterByType('coach', this)">👩‍🏫 Coaches <span class="cat-count" id="tab-coaches">0</span></div>
+        <div class="cat-tab" onclick="filterByType('tech', this)">🔧 Technicians <span class="cat-count" id="tab-tech">0</span></div>
+        <div class="cat-tab" onclick="filterByType('partner', this)">🤝 Partners <span class="cat-count" id="tab-partners">0</span></div>
+        <div class="cat-tab" onclick="filterByType('rink', this)">🏒 Ice Time <span class="cat-count" id="tab-rinks">0</span></div>
+      </div>
+
+      <!-- LOADING STATE -->
+      <div id="market-loading" style="text-align:center;padding:4rem 2rem;color:#7A8FA8">
+        <div style="font-size:1.8rem;margin-bottom:0.8rem;animation:spin 1.5s linear infinite;display:inline-block">🩰</div>
+        <div style="font-family:'Caveat',cursive;font-size:1.1rem;color:#C87A8A">loading the community... ♡</div>
+      </div>
+
+      <!-- DYNAMIC LISTINGS GRID -->
+      <div id="listings-grid" class="listing-grid" style="display:none"></div>
+
+      <!-- EMPTY STATE -->
+      <div id="market-empty" style="display:none;text-align:center;padding:5rem 2rem;background:white;border:1px solid #F2D8DE;border-radius:20px">
+        <div style="font-size:2.5rem;margin-bottom:1rem">🩰</div>
+        <div style="font-family:'DM Serif Display',serif;font-size:1.6rem;color:#1E2D4A;margin-bottom:0.4rem">Be the first to list here ♡</div>
+        <div style="font-family:'Caveat',cursive;font-size:1rem;color:#C87A8A;margin-bottom:1rem">the UAE skating community starts with you ✦</div>
+        <p style="font-size:0.88rem;color:#7A8FA8;max-width:420px;margin:0 auto 2rem;line-height:1.85;font-weight:300">Are you a coach, skate technician, or looking for a skating partner? Be among the first to list your profile and get discovered by skaters across the UAE.</p>
+        <button onclick="document.getElementById('list-modal').style.display='flex'"
+          style="background:#1E2D4A;color:white;padding:0.85rem 2rem;border-radius:50px;font-size:0.8rem;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;border:none;font-family:'Jost',sans-serif;font-weight:500">
+          List Your Services ✦
+        </button>
+      </div>
+
+      <!-- ADD YOUR LISTING CTA (shown below cards when listings exist) -->
+      <div id="market-add-cta" style="display:none;margin-top:2rem;background:var(--blush);border:1px solid var(--blush-deep);border-radius:20px;padding:2rem;text-align:center">
+        <div style="font-family:'Caveat',cursive;font-size:1.1rem;color:#C87A8A;margin-bottom:0.4rem">are you a coach or skate pro? ✦</div>
+        <div style="font-family:'DM Serif Display',serif;font-size:1.2rem;color:#1E2D4A;margin-bottom:1rem">Add your listing to the marketplace ♡</div>
+        <button onclick="document.getElementById('list-modal').style.display='flex'"
+          style="background:#1E2D4A;color:white;padding:0.75rem 1.8rem;border-radius:50px;font-size:0.78rem;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;border:none;font-family:'Jost',sans-serif;font-weight:500">
+          List Your Services 🩰
+        </button>
+      </div>
+    </div>
+  </div>
+  </div>
+</div>
+
+<!-- ============================= COACH PROFILE PAGE ============================= -->
+<div id="page-coach-profile" class="page-view">
+  <div class="inner-page">
+    <div class="breadcrumb"><a onclick="showPage('marketplace')">Marketplace</a> › <a onclick="showPage('marketplace')" id="profile-breadcrumb-type">Coaches</a> › <span id="profile-breadcrumb-name">—</span></div>
+    <div class="profile-header-card">
+      <div class="coach-avatar" id="profile-avatar">👩‍🏫</div>
+      <div>
+        <div class="ph-badge-tag" id="profile-badge">✦ Listed on Glideology</div>
+        <div class="coach-name" id="profile-name">—</div>
+        <div class="coach-title" id="profile-title">—</div>
+        <div class="coach-meta">
+          <div class="coach-meta-item" id="profile-location">📍 —</div>
+          <div class="coach-meta-item" id="profile-availability">🕐 —</div>
+          <div class="coach-meta-item" id="profile-price">💰 —</div>
+        </div>
+      </div>
+      <div class="ph-actions-col">
+        <button class="btn-book-big" id="profile-book-btn" onclick="openBookingModal()" style="display:none">Book a Session 🩰</button>
+        <button class="btn-msg" id="profile-wa-btn" onclick="openProfileWhatsApp()" style="display:none">WhatsApp ♡</button>
+        <div class="avail-badge-sm"><span class="avail-dot"></span>Active listing</div>
+      </div>
+    </div>
+
+    <div class="stats-strip-4">
+      <div class="ss-card"><div class="ss-num" id="profile-stat-reviews">0</div><div class="ss-label">Reviews</div></div>
+      <div class="ss-card"><div class="ss-num" id="profile-stat-listed">—</div><div class="ss-label">Member since</div></div>
+      <div class="ss-card"><div class="ss-num" id="profile-stat-price">—</div><div class="ss-label">Starting price</div></div>
+      <div class="ss-card"><div class="ss-num" id="profile-stat-type">—</div><div class="ss-label">Service type</div></div>
+    </div>
+      <div class="ss-card"><div class="ss-num">AED 180</div><div class="ss-label">Per hour</div></div>
+    </div>
+
+    <div class="content-grid-profile">
+      <div class="left-col-profile">
+        <div class="section-card">
+          <div class="sc-title" id="profile-about-title">About ♡</div>
+          <div class="bio-text" id="profile-bio">—</div>
+          <span class="bio-script" id="profile-tagline">glideology ✦</span>
+        </div>
+
+        <div class="section-card" id="profile-specs-card">
+          <div class="sc-title">Specialties ✦</div>
+          <div class="spec-grid" id="profile-specs-grid">
+            <div class="spec-pill" style="color:#7A8FA8;border-color:#F2D8DE;background:#F9F9F9">No specialties listed yet ♡</div>
+          </div>
+        </div>
+
+          </div>
+        </div>
+
+        <!-- CONTACT INFO SECTION — dynamic -->
+        <div class="contact-section-card" id="profile-contact-card">
+          <div class="sc-title">Contact & Find Me ♡</div>
+          <div id="profile-contact-rows"><!-- populated by openProfilePage() --></div>
+          <span class="contact-note" id="profile-contact-note">feel free to reach out ♡</span>
+          <form action="https://formspree.io/f/xojbnzvv" method="POST"
+  style="margin-top:1.5rem;display:flex;flex-direction:column;gap:0.8rem">
+  <input type="text" name="name" placeholder="Your name ♡" required
+    style="padding:0.75rem 1.2rem;border-radius:50px;border:1.5px solid #F2D8DE;font-family:'Jost',sans-serif;font-size:0.85rem;outline:none;color:#1E2D4A;background:#FDF8F5">
+  <input type="email" name="email" placeholder="Your email" required
+    style="padding:0.75rem 1.2rem;border-radius:50px;border:1.5px solid #F2D8DE;font-family:'Jost',sans-serif;font-size:0.85rem;outline:none;color:#1E2D4A;background:#FDF8F5">
+  <textarea name="message" placeholder="Your message..." rows="3" required
+    style="padding:0.75rem 1.2rem;border-radius:16px;border:1.5px solid #F2D8DE;font-family:'Jost',sans-serif;font-size:0.85rem;outline:none;color:#1E2D4A;background:#FDF8F5;resize:none"></textarea>
+  <button type="submit"
+    style="background:#1E2D4A;color:white;padding:0.75rem 1.5rem;border-radius:50px;font-size:0.8rem;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;border:none;font-family:'Jost',sans-serif;font-weight:500">
+    Send Message 🩰
+  </button>
+</form>
+        </div>
+
+        <div class="section-card">
+          <div class="sc-title">What skaters are saying ♡</div>
+          <div class="reviews-list">
+            <div class="review-item"><div class="review-top"><div class="reviewer"><div class="rev-avatar">S</div><div><div class="rev-name">Sara M.</div><div class="rev-stars">★★★★★</div></div></div><div class="rev-date">2 weeks ago</div></div><div class="rev-text">Coach Layla is genuinely one of the best coaches I've had. She's so patient and explains everything so clearly — I landed my flip for the first time after just 3 sessions with her ♡</div><span class="rev-tag">Jumps · Intermediate</span></div>
+            <div class="review-item"><div class="review-top"><div class="reviewer"><div class="rev-avatar">A</div><div><div class="rev-name">Aisha K.</div><div class="rev-stars">★★★★★</div></div></div><div class="rev-date">1 month ago</div></div><div class="rev-text">I came in as a complete beginner and Layla made me feel so welcome. Her warm-up routines are really good for building confidence and she always celebrates small wins!</div><span class="rev-tag">Beginner · First lessons</span></div>
+            <div class="review-item"><div class="review-top"><div class="reviewer"><div class="rev-avatar">N</div><div><div class="rev-name">Nour H.</div><div class="rev-stars">★★★★☆</div></div></div><div class="rev-date">2 months ago</div></div><div class="rev-text">Really solid coach — very technical and detailed. My Lutz has improved significantly. Would love if she offered more weekend slots!</div><span class="rev-tag">Competitive · Advanced jumps</span></div>
+          </div>
+
+          <!-- LEAVE A REVIEW -->
+          <div style="margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid #F2D8DE">
+            <div style="font-family:'DM Serif Display',serif;font-size:1rem;color:#1E2D4A;margin-bottom:0.3rem">Leave a review ♡</div>
+            <div style="font-family:'Caveat',cursive;font-size:0.88rem;color:#C87A8A;margin-bottom:1rem">share your experience to help other skaters ✦</div>
+
+            <!-- star picker -->
+            <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:1rem">
+              <div style="font-size:0.75rem;color:#7A8FA8;margin-right:0.2rem">Your rating:</div>
+              <div id="star-picker" style="display:flex;gap:0.2rem">
+                <span class="star-btn" data-val="1" onclick="setStars(1)" style="font-size:1.4rem;cursor:pointer;color:#F2D8DE;transition:color 0.15s">★</span>
+                <span class="star-btn" data-val="2" onclick="setStars(2)" style="font-size:1.4rem;cursor:pointer;color:#F2D8DE;transition:color 0.15s">★</span>
+                <span class="star-btn" data-val="3" onclick="setStars(3)" style="font-size:1.4rem;cursor:pointer;color:#F2D8DE;transition:color 0.15s">★</span>
+                <span class="star-btn" data-val="4" onclick="setStars(4)" style="font-size:1.4rem;cursor:pointer;color:#F2D8DE;transition:color 0.15s">★</span>
+                <span class="star-btn" data-val="5" onclick="setStars(5)" style="font-size:1.4rem;cursor:pointer;color:#F2D8DE;transition:color 0.15s">★</span>
+              </div>
+              <span id="star-label" style="font-size:0.75rem;color:#7A8FA8;margin-left:0.3rem"></span>
+            </div>
+
+            <div id="review-form-area" style="display:flex;flex-direction:column;gap:0.7rem">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.7rem">
+                <input id="rev-name" type="text" placeholder="Your name ♡"
+                  style="padding:0.68rem 1rem;border-radius:50px;border:1.5px solid #F2D8DE;font-family:'Jost',sans-serif;font-size:0.82rem;outline:none;background:white;color:#1E2D4A">
+                <select id="rev-level"
+                  style="padding:0.68rem 1rem;border-radius:50px;border:1.5px solid #F2D8DE;font-family:'Jost',sans-serif;font-size:0.82rem;color:#4A5F7A;background:white;outline:none">
+                  <option value="">Your level</option>
+                  <option>Beginner</option>
+                  <option>Intermediate</option>
+                  <option>Competitive</option>
+                </select>
+              </div>
+              <input id="rev-focus" type="text" placeholder="What were you working on? (e.g. Jumps, Spins...)"
+                style="padding:0.68rem 1rem;border-radius:50px;border:1.5px solid #F2D8DE;font-family:'Jost',sans-serif;font-size:0.82rem;outline:none;background:white;color:#1E2D4A">
+              <textarea id="rev-text" placeholder="Tell other skaters about your experience ♡" rows="3"
+                style="padding:0.68rem 1rem;border-radius:14px;border:1.5px solid #F2D8DE;font-family:'Jost',sans-serif;font-size:0.82rem;outline:none;background:white;color:#1E2D4A;resize:none"></textarea>
+              <div id="rev-error" style="font-size:0.75rem;color:#E87A7A;padding:0 0.3rem;display:none"></div>
+              <button onclick="submitReview()"
+                style="background:#1E2D4A;color:white;padding:0.75rem 1.5rem;border-radius:50px;font-size:0.8rem;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;border:none;font-family:'Jost',sans-serif;font-weight:500;align-self:flex-start">
+                Post Review ✦
+              </button>
+            </div>
+            <div id="review-submitted" style="display:none;background:#F9EEF0;border:1px solid #E8B8C2;border-radius:14px;padding:1rem 1.2rem;font-size:0.85rem;color:#9A4F5F;line-height:1.65">
+              🩰 Thank you for your review! It's been submitted and will appear here shortly ♡
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="right-col-profile">
+
+        <!-- AVAILABILITY CARD — populated from listing data -->
+        <div class="section-card" id="profile-avail-card">
+          <div class="sc-title">Availability ✦</div>
+
+          <!-- shown when coach provided availability -->
+          <div id="profile-avail-display" style="display:none">
+            <div style="font-family:'Caveat',cursive;font-size:0.95rem;color:#C87A8A;margin-bottom:1rem" id="profile-avail-text">—</div>
+            <div style="background:#F9EEF0;border:1px solid #E8B8C2;border-radius:14px;padding:1.2rem;margin-bottom:1.2rem">
+              <div style="font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;color:#C87A8A;font-weight:500;margin-bottom:0.6rem">How to book ♡</div>
+              <div style="font-size:0.82rem;color:#4A5F7A;line-height:1.75">Reach out directly using the contact details below to check availability and confirm your session time ✦</div>
+            </div>
+            <button class="btn-book-big" id="profile-book-btn-avail" style="width:100%;display:none" onclick="openBookingModal()">Request Booking 🩰</button>
+            <button id="profile-wa-btn-avail" style="width:100%;margin-top:0.7rem;display:none;background:transparent;color:#1E2D4A;padding:0.78rem;border-radius:50px;font-size:0.8rem;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;border:1.5px solid #E8B8C2;font-family:'Jost',sans-serif" onclick="openProfileWhatsApp()">
+              WhatsApp to Book ♡
+            </button>
+          </div>
+
+          <!-- shown when no availability provided -->
+          <div id="profile-avail-empty" style="display:none;text-align:center;padding:1.5rem 0">
+            <div style="font-size:1.4rem;margin-bottom:0.5rem">🕐</div>
+            <div style="font-size:0.85rem;color:#7A8FA8;line-height:1.7">This listing hasn't added availability yet.<br>Reach out directly to arrange a time ♡</div>
+          </div>
+
+          <!-- loading state -->
+          <div id="profile-avail-loading" style="font-size:0.82rem;color:#7A8FA8;padding:0.5rem 0">Loading... ♡</div>
+        </div>
+
+        <!-- PRICE CARD — populated from listing data -->
+        <div class="section-card" id="profile-price-card" style="display:none">
+          <div class="sc-title" style="margin-bottom:0.8rem">Pricing ♡</div>
+          <div id="profile-price-display" style="display:flex;flex-direction:column;gap:0.6rem"></div>
+        </div>
+
+        <!-- CONTACT QUICK ACTIONS -->
+        <div class="section-card">
+          <div class="sc-title" style="margin-bottom:0.8rem">Get in touch ✦</div>
+          <div style="display:flex;flex-direction:column;gap:0.6rem">
+            <div id="quick-whatsapp-wrap" style="display:none">
+              <button onclick="openProfileWhatsApp()"
+                style="width:100%;background:#25D366;color:white;padding:0.78rem;border-radius:50px;font-size:0.8rem;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;border:none;font-family:'Jost',sans-serif;font-weight:500">
+                💬 Open WhatsApp
+              </button>
+            </div>
+            <div id="quick-email-wrap" style="display:none">
+              <a id="quick-email-link" href="#"
+                style="display:block;width:100%;background:#1E2D4A;color:white;padding:0.78rem;border-radius:50px;font-size:0.8rem;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;text-decoration:none;text-align:center;font-family:'Jost',sans-serif;font-weight:500;box-sizing:border-box">
+                📧 Send Email
+              </a>
+            </div>
+            <div style="font-size:0.72rem;color:#7A8FA8;text-align:center;line-height:1.6;margin-top:0.3rem" id="quick-contact-note">Contact details below ♡</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function showPage(id) {
+  document.querySelectorAll('.page-view').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-links a').forEach(a => a.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  const navEl = document.getElementById('nav-' + id);
+  if (navEl) navEl.classList.add('active');
+  // marketplace login wall — check if user is logged in
+  if (id === 'marketplace') {
+    const isLoggedIn = window._glideologyUser || false;
+    document.getElementById('market-login-wall').style.display = isLoggedIn ? 'none' : 'flex';
+    document.getElementById('market-content').style.display = isLoggedIn ? 'block' : 'none';
+  }
+  window.scrollTo(0,0);
+}
+
+function selectElement(el) {
+  document.querySelectorAll('.element-pills .epill:not(.other-pill)').forEach(p => {
+    p.classList.remove('selected','selected-rose');
+  });
+  el.classList.add('selected-rose');
+  document.getElementById('other-pill').classList.remove('selected');
+  document.getElementById('other-input-wrap').classList.remove('visible');
+}
+
+function toggleOther(el) {
+  const wrap = document.getElementById('other-input-wrap');
+  const isActive = el.classList.contains('selected');
+  document.querySelectorAll('.element-pills .epill').forEach(p => p.classList.remove('selected','selected-rose'));
+  if (!isActive) {
+    el.classList.add('selected');
+    wrap.classList.add('visible');
+    document.getElementById('other-input').focus();
+  } else {
+    wrap.classList.remove('visible');
+  }
+}
+
+function copyText(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = 'Copied ♡';
+    btn.style.color = '#C87A8A';
+    btn.style.borderColor = '#C87A8A';
+    setTimeout(() => { btn.textContent = 'Copy'; btn.style.color = ''; btn.style.borderColor = ''; }, 2000);
+  });
+}
+
+// ---- VIDEO UPLOAD + AI FEEDBACK ----
+const AI_WORKER_URL = 'https://glideology-ai.agrawal-nishka12.workers.dev/';
+const CLOUDINARY_CLOUD = 'dpzuzrjpo';
+const CLOUDINARY_PRESET = 'glideology_videos';
+
+function setProgress(pct, msg, emoji) {
+  const bar = document.getElementById('progress-bar');
+  const pctEl = document.getElementById('progress-pct');
+  const statusEl = document.getElementById('upload-status');
+  const emojiEl = document.getElementById('upload-emoji');
+  if (bar) bar.style.width = pct + '%';
+  if (pctEl) pctEl.textContent = pct + '%';
+  if (msg && statusEl) statusEl.textContent = msg;
+  if (emoji && emojiEl) emojiEl.textContent = emoji;
+}
+
+async function handleVideoUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+  document.getElementById('feedback-upload-state').style.display = 'none';
+  document.getElementById('upload-progress').style.display = 'block';
+  document.querySelector('.results-grid').style.display = 'none';
+  setProgress(10, 'Getting ready... ♡', '🎥');
+  const selectedPill = document.querySelector('.epill.selected-rose, .epill.selected');
+  const element = selectedPill ? selectedPill.textContent.trim()
+    : (document.getElementById('other-input')?.value.trim() || 'figure skating');
+  try {
+    setProgress(25, 'Uploading your video to the cloud... ✦', '☁️');
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('upload_preset', CLOUDINARY_PRESET);
+    const cloudRes = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/video/upload`, { method:'POST', body:fd });
+    const cloudData = await cloudRes.json();
+    if (!cloudData.secure_url) throw new Error('Upload failed');
+    setProgress(60, 'AI is watching your skating... ♡', '🤖');
+    const aiRes = await fetch(AI_WORKER_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ videoUrl: cloudData.secure_url, element })
+    });
+
+    if (!aiRes.ok) {
+      const errText = await aiRes.text();
+      console.error('Worker error:', aiRes.status, errText);
+      throw new Error('AI returned ' + aiRes.status + ' — check your Cloudflare Worker API key');
+    }
+
+    const feedback = await aiRes.json();
+
+    if (!feedback || typeof feedback.overallScore === 'undefined') {
+      console.error('Bad feedback response:', feedback);
+      throw new Error('AI response was missing data — check Worker logs');
+    }
+    setProgress(100, 'Feedback ready! ✦', '✨');
+    setTimeout(() => displayFeedback(feedback, file.name), 600);
+  } catch(err) {
+    setProgress(0, 'Something went wrong — please try again ♡', '😔');
+    console.error(err);
+    setTimeout(resetFeedback, 3000);
+  }
+}
+
+function displayFeedback(data, filename) {
+  document.getElementById('upload-progress').style.display = 'none';
+  document.querySelector('.results-grid').style.display = 'grid';
+  document.querySelector('.score-big').innerHTML = data.overallScore + '<span class="score-suffix">/100</span>';
+  const miniBig = document.querySelector('.score-big-mini');
+  if (miniBig) miniBig.textContent = data.overallScore;
+  document.querySelector('.video-title-label').textContent = filename;
+  const bars = document.querySelectorAll('.bar-fill');
+  const barVals = document.querySelectorAll('.bar-val');
+  const barNames = document.querySelectorAll('.bar-name');
+  if (data.scores && typeof data.scores === 'object') {
+    Object.entries(data.scores).forEach(([name, val], i) => {
+      if (bars[i]) bars[i].style.width = val + '%';
+      if (barVals[i]) barVals[i].textContent = val;
+      if (barNames[i]) barNames[i].textContent = name;
+    });
+  }
+  document.querySelector('.feedback-panel').querySelectorAll('.feedback-card').forEach(c => c.remove());
+  document.querySelector('.safety-card .safety-body').textContent = data.safetyNote;
+  const pm = { fix:{cls:'priority-fix',dot:'dot-red',label:'Fix this first'}, check:{cls:'priority-check',dot:'dot-amber',label:'Worth working on'}, good:{cls:'priority-good',dot:'dot-green',label:'Looking great!'} };
+  let fixCount = 0, goodCount = 0;
+  const scoreCard = document.querySelector('.score-card');
+  data.feedback.forEach(item => {
+    const p = pm[item.priority] || pm.check;
+    if (item.priority === 'fix' || item.priority === 'check') fixCount++;
+    if (item.priority === 'good') goodCount++;
+    const card = document.createElement('div');
+    card.className = 'feedback-card';
+    card.innerHTML = `<div class="fc-top"><div class="fc-type"><div class="fc-dot ${p.dot}"></div><div class="fc-element">${item.area}</div></div><div class="fc-priority ${p.cls}">${p.label}</div></div><div class="fc-body-text">${item.body}</div>${item.tip?`<div class="fc-tip"><span>♡</span><span>${item.tip}</span></div>`:''}`;
+    scoreCard.insertAdjacentElement('afterend', card);
+  });
+  const fixEl = document.getElementById('fix-count');
+  const goodEl = document.getElementById('good-count');
+  if (fixEl) fixEl.textContent = fixCount;
+  if (goodEl) goodEl.textContent = goodCount;
+}
+
+function resetFeedback() {
+  document.getElementById('feedback-upload-state').style.display = 'block';
+  document.getElementById('upload-progress').style.display = 'none';
+  document.querySelector('.results-grid').style.display = 'none';
+  setProgress(0, 'Uploading your video... ♡', '🎥');
+  const fi = document.getElementById('video-file-input');
+  if (fi) fi.value = '';
+  document.querySelectorAll('.epill').forEach(p => p.classList.remove('selected','selected-rose'));
+  const wrap = document.getElementById('other-input-wrap');
+  if (wrap) wrap.classList.remove('visible');
+}
+
+// ---- COACH DATA — update these when real coaches join ----
+const COACH_DATA = {
+  name: 'Coach Layla S.',
+  phone: '971501234567',        // WhatsApp number, no + or spaces
+  iban: 'AE07 0331 2345 6789 0123 456',
+  ibanName: 'Layla S. Coaching',
+  ibanBank: 'Emirates NBD',
+  ibanRef: 'GLIDE-LAYLA-0521',
+  slot: 'Wednesday 21 May · 4:00 PM',
+  location: 'Dubai Ice Rink',
+  sessionType: 'Private · 1 hour',
+  price: 225,
+  currency: 'AED'
+};
+
+// ---- MARKETPLACE — Firestore-powered ----
+// Category config
+const CAT_CONFIG = {
+  coach:   { emoji:'👩‍🏫', label:'Coach',       banner:'linear-gradient(135deg,#F2D8DE,#E8B8C2)' },
+  synchro: { emoji:'🔄',   label:'Synchro',     banner:'linear-gradient(135deg,#F2D8DE,#E8B8C2)' },
+  partner: { emoji:'🤝',   label:'Partner',     banner:'linear-gradient(135deg,#F9EEF0,#F2D8DE)' },
+  tech:    { emoji:'🔧',   label:'Technician',  banner:'linear-gradient(135deg,#EAF4F8,#B8E4F4)' },
+  rink:    { emoji:'🏒',   label:'Ice Time',    banner:'linear-gradient(135deg,#EAF4F8,#EAF4F8)' },
+  other:   { emoji:'✦',    label:'Other',       banner:'linear-gradient(135deg,#F9EEF0,#EAF4F8)' },
+};
+
+let _allListings = [];
+let _activeType = 'all';
+let _activeLocation = 'all';
+let _currentListing = null;
+
+// Called by Firebase onAuthStateChanged when user logs in
+window.loadListings = async function(db) {
+  try {
+    const { collection, getDocs, orderBy, query } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+    const q = query(collection(db, 'listings'), orderBy('createdAt', 'desc'));
+    const snap = await getDocs(q);
+    _allListings = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderListings();
+  } catch(e) {
+    console.error('loadListings error:', e);
+    showMarketEmpty();
+  }
+}
+
+function renderListings() {
+  const grid = document.getElementById('listings-grid');
+  const loading = document.getElementById('market-loading');
+  const empty = document.getElementById('market-empty');
+  const addCta = document.getElementById('market-add-cta');
+  if (!grid) return;
+
+  // Filter
+  const search = (document.getElementById('market-search')?.value || '').toLowerCase();
+  let filtered = _allListings.filter(l => {
+    const matchType = _activeType === 'all' || l.type === _activeType;
+    const matchLoc = _activeLocation === 'all' || (l.location || '').toLowerCase().includes('dubai');
+    const matchSearch = !search || [l.name, l.title, l.location, l.bio, l.specialties].join(' ').toLowerCase().includes(search);
+    return matchType && matchLoc && matchSearch;
+  });
+
+  // Update tab counts
+  const types = ['coach','synchro','partner','tech','rink','other'];
+  const all = _allListings;
+  document.getElementById('tab-all').textContent = all.length;
+  document.getElementById('tab-coaches').textContent = all.filter(l => l.type === 'coach' || l.type === 'synchro').length;
+  document.getElementById('tab-tech').textContent = all.filter(l => l.type === 'tech').length;
+  document.getElementById('tab-partners').textContent = all.filter(l => l.type === 'partner').length;
+  document.getElementById('tab-rinks').textContent = all.filter(l => l.type === 'rink').length;
+
+  // Update header stats
+  const sc = el => { const e = document.getElementById(el); if(e) e.textContent = all.filter(l => l.type === 'coach' || l.type === 'synchro').length; };
+  const st = el => { const e = document.getElementById(el); if(e) e.textContent = all.filter(l => l.type === 'tech').length; };
+  const sp = el => { const e = document.getElementById(el); if(e) e.textContent = all.filter(l => l.type === 'partner').length; };
+  const sr = el => { const e = document.getElementById(el); if(e) e.textContent = all.filter(l => l.type === 'rink').length; };
+  sc('stat-coaches'); st('stat-tech'); sp('stat-partners'); sr('stat-rinks');
+
+  if (loading) loading.style.display = 'none';
+
+  if (filtered.length === 0) {
+    grid.style.display = 'none';
+    if (empty) empty.style.display = 'block';
+    if (addCta) addCta.style.display = 'none';
+    return;
+  }
+
+  if (empty) empty.style.display = 'none';
+  if (addCta) addCta.style.display = 'block';
+  grid.style.display = 'grid';
+  grid.innerHTML = filtered.map(l => buildListingCard(l)).join('');
+}
+
+function buildListingCard(l) {
+  const cat = CAT_CONFIG[l.type] || CAT_CONFIG.other;
+  const specs = (l.specialties || '').split(',').slice(0,3).map(s => `<span class="ctag">${s.trim()}</span>`).join('');
+  return `
+    <div class="listing-card" onclick="openProfilePage('${l.id}')">
+      <div class="card-banner" style="background:${cat.banner}">${cat.emoji}</div>
+      <div class="card-body-listing">
+        <div class="card-type-label">${l.selectedLabel || cat.label}</div>
+        <div class="card-name-big">${l.name}</div>
+        <div class="card-location-sm">📍 ${l.location || 'UAE'}</div>
+        <div class="card-tags-row">${specs}</div>
+        <div style="font-size:0.78rem;color:#7A8FA8;margin-bottom:0.8rem;line-height:1.6">${(l.bio||'').substring(0,80)}${(l.bio||'').length > 80 ? '...' : ''}</div>
+        <div class="card-footer-row">
+          <div class="card-price-big">${l.price || 'Contact for price'}</div>
+          <button class="btn-book" onclick="event.stopPropagation();openProfilePage('${l.id}')">View Profile</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function showMarketEmpty() {
+  const loading = document.getElementById('market-loading');
+  const empty = document.getElementById('market-empty');
+  const grid = document.getElementById('listings-grid');
+  if (loading) loading.style.display = 'none';
+  if (empty) empty.style.display = 'block';
+  if (grid) grid.style.display = 'none';
+}
+
+window.filterByType = function(type, el) {
+  _activeType = type;
+  document.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
+  if (el) el.classList.add('active');
+  renderListings();
+}
+
+window.filterListings = function() { renderListings(); }
+
+window.setLocationFilter = function(loc, el) {
+  _activeLocation = loc;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  if (el) el.classList.add('active');
+  renderListings();
+}
+
+window.sortListings = function(val) {
+  if (val === 'name') _allListings.sort((a,b) => (a.name||'').localeCompare(b.name||''));
+  else _allListings.sort((a,b) => new Date(b.createdAt||0) - new Date(a.createdAt||0));
+  renderListings();
+}
+
+// Open a listing's profile page
+window.openProfilePage = function(listingId) {
+  const l = _allListings.find(x => x.id === listingId);
+  if (!l) return;
+  _currentListing = l;
+  const cat = CAT_CONFIG[l.type] || CAT_CONFIG.other;
+
+  // Populate header
+  const set = (id, val) => { const e = document.getElementById(id); if(e) e.textContent = val; };
+  set('profile-breadcrumb-type', cat.label + 's');
+  set('profile-breadcrumb-name', l.name);
+  set('profile-avatar', cat.emoji);
+  set('profile-badge', '✦ ' + (l.selectedLabel || cat.label));
+  set('profile-name', l.name);
+  set('profile-title', l.title || cat.label + ' · ' + (l.location || 'UAE'));
+  set('profile-location', '📍 ' + (l.location || 'UAE'));
+  set('profile-availability', l.availability ? ('🕐 ' + l.availability) : '');
+  set('profile-price', l.price ? ('💰 ' + l.price) : '');
+  set('profile-stat-listed', l.createdAt ? new Date(l.createdAt).toLocaleDateString('en-GB',{month:'short',year:'numeric'}) : '—');
+  set('profile-stat-price', l.price || '—');
+  set('profile-stat-type', cat.label);
+
+  // Bio
+  set('profile-about-title', 'About ' + l.name.split(' ')[0] + ' \u2661');
+  set('profile-bio', l.bio || 'No bio provided yet.');
+
+  // Specialties
+  const grid = document.getElementById('profile-specs-grid');
+  if (grid) {
+    if (l.specialties) {
+      const icons = ['🩰','✦','🌀','⭐','💫','✨','🌸','🎀','🌊','🪩'];
+      grid.innerHTML = l.specialties.split(',').map((s,i) =>
+        `<div class="spec-pill">${icons[i%icons.length]} ${s.trim()}</div>`
+      ).join('');
+    } else {
+      grid.innerHTML = '<div class="spec-pill" style="color:#7A8FA8">No specialties listed ♡</div>';
+    }
+  }
+
+  // Contact section
+  const rows = document.getElementById('profile-contact-rows');
+  if (rows) {
+    let html = '';
+    if (l.email) html += contactRow('📧','Email',`<a href="mailto:${l.email}">${l.email}</a>`,l.email);
+    if (l.phone) html += contactRow('📱','WhatsApp / Phone','+'+l.phone,'+'+l.phone);
+    if (l.location) html += contactRow('📍','Location',l.location,'');
+    if (l.availability) html += contactRow('🕐','Availability',l.availability,'');
+    if (l.iban) html += contactRow('🏦','Bank (IBAN)',l.iban,l.iban);
+    rows.innerHTML = html || '<div style="font-size:0.82rem;color:#7A8FA8;padding:0.5rem 0">Contact details not provided ♡</div>';
+  }
+
+  // Show/hide action buttons
+  const bookBtn = document.getElementById('profile-book-btn');
+  const waBtn = document.getElementById('profile-wa-btn');
+  if (bookBtn) bookBtn.style.display = (l.type === 'coach' || l.type === 'synchro') ? 'block' : 'none';
+  if (waBtn) waBtn.style.display = l.phone ? 'block' : 'none';
+
+  // Update COACH_DATA for payment modal
+  if (typeof COACH_DATA !== 'undefined') {
+    COACH_DATA.name = l.name;
+    COACH_DATA.phone = l.phone || '';
+    COACH_DATA.iban = l.iban || '';
+    COACH_DATA.ibanBank = l.bank || '';
+    COACH_DATA.ibanName = l.name;
+    COACH_DATA.ibanRef = 'GLIDE-' + l.name.replace(/\s+/g,'').toUpperCase().substring(0,8);
+    COACH_DATA.price = parseInt((l.price||'0').replace(/[^0-9]/g,'')) || 0;
+    COACH_DATA.currency = 'AED';
+  }
+
+  // Right column — availability + Calendly
+  const availLoading = document.getElementById('profile-avail-loading');
+  const availDisplay = document.getElementById('profile-avail-display');
+  const availEmpty = document.getElementById('profile-avail-empty');
+  const availText = document.getElementById('profile-avail-text');
+  const bookBtnAvail = document.getElementById('profile-book-btn-avail');
+  const waBtnAvail = document.getElementById('profile-wa-btn-avail');
+
+  if (availLoading) availLoading.style.display = 'none';
+
+  if (l.calendly) {
+    // Coach has a Calendly — embed it directly, hide the manual availability block
+    if (availDisplay) availDisplay.style.display = 'none';
+    if (availEmpty) availEmpty.style.display = 'none';
+
+    // Build embed — convert profile URL to embed URL
+    let embedUrl = l.calendly.trim();
+    if (!embedUrl.includes('/embed/')) {
+      // e.g. https://calendly.com/name/event → https://calendly.com/name/event?embed_type=Inline
+      embedUrl = embedUrl.replace('https://calendly.com', 'https://calendly.com') + '?embed_type=Inline&hide_gdpr_banner=1&primary_color=c87a8a';
+    }
+
+    const availCard = document.getElementById('profile-avail-card');
+    if (availCard) {
+      availCard.innerHTML = `
+        <div style="font-family:'DM Serif Display',serif;font-size:1.1rem;color:#1E2D4A;margin-bottom:0.3rem;display:flex;align-items:center;gap:0.5rem">Book a session ✦</div>
+        <div style="font-family:'Caveat',cursive;font-size:0.9rem;color:#C87A8A;margin-bottom:1rem">pick a slot that works for you ♡</div>
+        <div class="calendly-inline-widget"
+          data-url="${embedUrl}"
+          style="min-width:100%;height:520px;border-radius:14px;overflow:hidden;border:1px solid #F2D8DE">
+        </div>
+        <script type="text/javascript" src="https://assets.calendly.com/assets/external/widget.js" async><\/script>
+      `;
+    }
+
+  } else if (l.availability) {
+    // No Calendly but has text availability
+    if (availDisplay) availDisplay.style.display = 'block';
+    if (availEmpty) availEmpty.style.display = 'none';
+    if (availText) availText.textContent = l.availability + ' ♡';
+    if (bookBtnAvail) bookBtnAvail.style.display = (l.type === 'coach' || l.type === 'synchro') ? 'block' : 'none';
+    if (waBtnAvail) waBtnAvail.style.display = l.phone ? 'block' : 'none';
+
+  } else {
+    // Nothing provided
+    if (availDisplay) availDisplay.style.display = 'none';
+    if (availEmpty) availEmpty.style.display = 'block';
+  }
+
+  // Right column — price card
+  const priceCard = document.getElementById('profile-price-card');
+  const priceDisplay = document.getElementById('profile-price-display');
+  if (l.price && priceCard && priceDisplay) {
+    priceCard.style.display = 'block';
+    priceDisplay.innerHTML = `
+      <div style="padding:0.8rem;background:var(--blush);border-radius:12px;border:1px solid var(--blush-deep)">
+        <div style="font-size:0.82rem;color:#1E2D4A;font-weight:500;margin-bottom:0.15rem">${l.selectedLabel || 'Service'}</div>
+        <div style="font-size:0.78rem;color:#7A8FA8">${l.price}</div>
+      </div>`;
+  } else if (priceCard) {
+    priceCard.style.display = 'none';
+  }
+
+  // Right column — quick contact buttons
+  const waWrap = document.getElementById('quick-whatsapp-wrap');
+  const emailWrap = document.getElementById('quick-email-wrap');
+  const emailLink = document.getElementById('quick-email-link');
+  const contactNote = document.getElementById('quick-contact-note');
+  if (waWrap) waWrap.style.display = l.phone ? 'block' : 'none';
+  if (emailWrap) emailWrap.style.display = l.email ? 'block' : 'none';
+  if (emailLink) emailLink.href = l.email ? 'mailto:' + l.email : '#';
+  if (contactNote) contactNote.textContent = l.phone || l.email ? 'Tap to reach out directly ♡' : 'No contact details provided yet ♡';
+
+  showPage('coach-profile');
+}
+
+function contactRow(icon, label, valueHtml, copyVal) {
+  const copyBtn = copyVal ? `<button class="contact-copy-btn" onclick="copyText('${copyVal}', this)">Copy</button>` : '';
+  return `<div class="contact-row">
+    <div class="contact-icon">${icon}</div>
+    <div class="contact-info">
+      <div class="contact-label">${label}</div>
+      <div class="contact-value">${valueHtml}</div>
+    </div>${copyBtn}</div>`;
+}
+
+window.openProfileWhatsApp = function() {
+  if (!_currentListing?.phone) return;
+  const name = _currentListing.name;
+  const msg = encodeURIComponent('Hi ' + name + '! I found you on Glideology and would love to connect \uD83E\uDE70');
+  window.open('https://wa.me/' + _currentListing.phone + '?text=' + msg, '_blank');
+}
+
+// Submit listing to Firestore
+window.submitListing = async function() {
+  const errEl = document.getElementById('list-error');
+  errEl.style.display = 'none';
+  const name = document.getElementById('list-name')?.value.trim();
+  const email = document.getElementById('list-email')?.value.trim();
+  const type = document.getElementById('list-type')?.value;
+  const bio = document.getElementById('list-bio')?.value.trim();
+  const typeSelect = document.getElementById('list-type');
+  const selectedLabel = typeSelect?.options[typeSelect.selectedIndex]?.text || '';
+
+  if (!name) { errEl.textContent = 'Please enter your name ♡'; errEl.style.display='block'; return; }
+  if (!email || !email.includes('@')) { errEl.textContent = 'Please enter a valid email ♡'; errEl.style.display='block'; return; }
+  if (!type) { errEl.textContent = 'Please choose a category ♡'; errEl.style.display='block'; return; }
+  if (!bio) { errEl.textContent = 'Please write a short bio ♡'; errEl.style.display='block'; return; }
+
+  if (!window._glideologyUser) {
+    errEl.textContent = 'Please sign in first to list your services ♡';
+    errEl.style.display='block';
+    return;
+  }
+
+  try {
+    const { getFirestore, collection, addDoc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+    const db = getFirestore();
+    const listing = {
+      name, email,
+      phone: document.getElementById('list-phone')?.value.trim().replace(/\s+/g,'') || '',
+      location: document.getElementById('list-location')?.value.trim() || '',
+      type,
+      selectedLabel: selectedLabel.replace(/^[^\w]+/,'').trim(),
+      title: document.getElementById('list-title')?.value.trim() || '',
+      price: document.getElementById('list-price')?.value.trim() || '',
+      iban: document.getElementById('list-iban')?.value.trim() || '',
+      bank: document.getElementById('list-bank')?.value.trim() || '',
+      bio,
+      specialties: document.getElementById('list-specialties')?.value.trim() || '',
+      availability: document.getElementById('list-availability')?.value.trim() || '',
+      calendly: document.getElementById('list-calendly')?.value.trim() || '',
+      userId: window._glideologyUser.uid,
+      createdAt: new Date().toISOString(),
+    };
+    await addDoc(collection(db, 'listings'), listing);
+
+    // Add to local array and re-render immediately
+    _allListings.unshift({ id: 'new-' + Date.now(), ...listing });
+    renderListings();
+
+    // Show success screen
+    document.getElementById('list-form-state').style.display = 'none';
+    document.getElementById('list-success-state').style.display = 'block';
+
+    // Reset form
+    ['list-name','list-email','list-phone','list-location','list-title','list-price','list-iban','list-bank','list-bio','list-specialties','list-availability','list-calendly'].forEach(id => {
+      const el = document.getElementById(id); if(el) el.value = '';
+    });
+    const sel = document.getElementById('list-type'); if(sel) sel.value = '';
+
+  } catch(e) {
+    errEl.textContent = 'Something went wrong — please try again ♡';
+    errEl.style.display = 'block';
+    console.error('submitListing error:', e);
+  }
+}
+
+// ---- STAR RATING ----
+let selectedStars = 0;
+const starLabels = ['','Poor','Okay','Good','Great','Amazing ♡'];
+
+window.setStars = function(val) {
+  selectedStars = val;
+  document.querySelectorAll('.star-btn').forEach(s => {
+    s.style.color = parseInt(s.dataset.val) <= val ? '#C9A96E' : '#F2D8DE';
+  });
+  const lbl = document.getElementById('star-label');
+  if (lbl) lbl.textContent = starLabels[val] || '';
+}
+
+// ---- SUBMIT REVIEW ----
+window.submitReview = function() {
+  const name = document.getElementById('rev-name')?.value.trim();
+  const text = document.getElementById('rev-text')?.value.trim();
+  const level = document.getElementById('rev-level')?.value;
+  const focus = document.getElementById('rev-focus')?.value.trim();
+  const errEl = document.getElementById('rev-error');
+
+  if (!name) { errEl.textContent = 'Please enter your name ♡'; errEl.style.display = 'block'; return; }
+  if (!text) { errEl.textContent = 'Please write something about your experience ♡'; errEl.style.display = 'block'; return; }
+  if (selectedStars === 0) { errEl.textContent = 'Please choose a star rating ♡'; errEl.style.display = 'block'; return; }
+  errEl.style.display = 'none';
+
+  // Build the new review card and insert it
+  const starsStr = '★'.repeat(selectedStars) + '☆'.repeat(5 - selectedStars);
+  const tagText = [focus, level].filter(Boolean).join(' · ');
+  const newCard = document.createElement('div');
+  newCard.className = 'review-item';
+  newCard.style.cssText = 'padding-bottom:1.2rem;border-bottom:1px solid #F2D8DE;';
+  newCard.innerHTML = `
+    <div class="review-top">
+      <div class="reviewer">
+        <div class="rev-avatar">${name[0].toUpperCase()}</div>
+        <div><div class="rev-name">${name}</div><div class="rev-stars" style="color:#C9A96E;font-size:0.72rem;letter-spacing:1px">${starsStr}</div></div>
+      </div>
+      <div class="rev-date">Just now</div>
+    </div>
+    <div class="rev-text" style="font-size:0.82rem;color:#4A5F7A;line-height:1.7;font-weight:300">${text}</div>
+    ${tagText ? `<span class="rev-tag">${tagText}</span>` : ''}
+  `;
+
+  // Insert before the leave-a-review section
+  const reviewsList = document.querySelector('.reviews-list');
+  if (reviewsList) reviewsList.insertBefore(newCard, reviewsList.firstChild);
+
+  // Show thank you, hide form
+  document.getElementById('review-form-area').style.display = 'none';
+  document.getElementById('review-submitted').style.display = 'block';
+
+  // Reset after 4s so another review can be left
+  setTimeout(() => {
+    document.getElementById('review-form-area').style.display = 'flex';
+    document.getElementById('review-submitted').style.display = 'none';
+    document.getElementById('rev-name').value = '';
+    document.getElementById('rev-text').value = '';
+    document.getElementById('rev-focus').value = '';
+    document.getElementById('rev-level').value = '';
+    selectedStars = 0;
+    document.querySelectorAll('.star-btn').forEach(s => s.style.color = '#F2D8DE');
+    const lbl = document.getElementById('star-label');
+    if (lbl) lbl.textContent = '';
+  }, 4000);
+}
+
+// ---- BOOKING + PAYMENT FLOW ----
+let selectedPaymentMethod = null;
+
+function openBookingModal() {
+  // Populate modal with real coach data
+  const c = COACH_DATA;
+  const titleEl = document.querySelector('#booking-step-1 .DM-title, #booking-step-1 [style*="DM Serif"]');
+
+  // Update step 1 header
+  const step1Header = document.querySelector('#booking-step-1 [style*="font-size:1.5rem"]');
+  if (step1Header) step1Header.textContent = 'Book ' + c.name;
+
+  // Update step 2 header total
+  const step2Total = document.querySelector('#booking-step-2 [style*="Caveat"]');
+  if (step2Total) step2Total.textContent = 'Total: ' + c.currency + ' ' + c.price + ' ♡';
+
+  // Update bank details
+  const ibanEl = document.querySelector('[style*="AE07"]') || document.getElementById('iban-display');
+  if (ibanEl) ibanEl.textContent = c.iban;
+
+  // Update cash phone
+  const cashPhone = document.getElementById('cash-phone-display');
+  if (cashPhone) cashPhone.textContent = '📱 +' + c.phone;
+
+  // Update WhatsApp link
+  const waLink = document.getElementById('whatsapp-link');
+  if (waLink) {
+    const msg = encodeURIComponent('Hi ' + c.name + '! I\'d like to book a session on ' + c.slot + ' 🩰');
+    waLink.href = 'https://wa.me/' + c.phone + '?text=' + msg;
+    waLink.textContent = 'Open WhatsApp ↗';
+  }
+
+  // Reset to step 1
+  document.getElementById('booking-step-1').style.display = 'block';
+  document.getElementById('booking-step-2').style.display = 'none';
+  document.getElementById('booking-step-3').style.display = 'none';
+  const errEl = document.getElementById('book-error');
+  if (errEl) errEl.style.display = 'none';
+  selectedPaymentMethod = null;
+  document.getElementById('booking-modal').style.display = 'flex';
+}
+
+function goToPayment() {
+  const name = document.getElementById('book-name').value.trim();
+  const email = document.getElementById('book-email').value.trim();
+  const errEl = document.getElementById('book-error');
+
+  if (!name || !email) {
+    errEl.textContent = 'Please fill in your name and email ♡';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (!email.includes('@')) {
+    errEl.textContent = 'Please enter a valid email address';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  errEl.style.display = 'none';
+  document.getElementById('booking-step-1').style.display = 'none';
+  document.getElementById('booking-step-2').style.display = 'block';
+}
+
+function backToDetails() {
+  document.getElementById('booking-step-2').style.display = 'none';
+  document.getElementById('booking-step-1').style.display = 'block';
+}
+
+function selectPayment(method) {
+  selectedPaymentMethod = method;
+
+  // Reset all options
+  ['bank','cash','whatsapp'].forEach(m => {
+    const opt = document.getElementById('pay-' + m);
+    const chk = document.getElementById('check-' + m);
+    const det = document.getElementById(m + '-details');
+    opt.style.borderColor = '#F2D8DE';
+    opt.style.background = 'white';
+    chk.style.background = 'white';
+    chk.style.borderColor = '#F2D8DE';
+    chk.innerHTML = '';
+    det.style.display = 'none';
+  });
+
+  // Highlight selected
+  const opt = document.getElementById('pay-' + method);
+  const chk = document.getElementById('check-' + method);
+  const det = document.getElementById(method + '-details');
+  opt.style.borderColor = '#C87A8A';
+  opt.style.background = '#F9EEF0';
+  chk.style.background = '#C87A8A';
+  chk.style.borderColor = '#C87A8A';
+  chk.innerHTML = '<span style="color:white;font-size:0.65rem">✓</span>';
+  chk.style.display = 'flex';
+  chk.style.alignItems = 'center';
+  chk.style.justifyContent = 'center';
+  det.style.display = 'block';
+}
+
+function confirmBooking() {
+  if (!selectedPaymentMethod) { alert('Please choose a payment method ♡'); return; }
+  const c = COACH_DATA;
+  const methodLabels = { bank: 'Bank Transfer', cash: 'Cash at the Rink', whatsapp: 'Via WhatsApp' };
+  const methodNotes = {
+    bank: `Please transfer ${c.currency} ${c.price} to ${c.ibanBank} (IBAN: ${c.iban}) in the name of "${c.ibanName}" using reference ${c.ibanRef} before your session. ${c.name} will confirm once payment is received ♡`,
+    cash: `Please arrive 10 minutes early with ${c.currency} ${c.price} in cash. Message ${c.name} on WhatsApp (+${c.phone}) so they know to expect you ♡`,
+    whatsapp: `${c.name} will reach out on WhatsApp (+${c.phone}) to arrange payment. Make sure your number is correct ♡`
+  };
+  document.getElementById('confirm-payment-method').textContent = methodLabels[selectedPaymentMethod];
+  document.getElementById('confirm-payment-note').textContent = methodNotes[selectedPaymentMethod];
+  document.getElementById('booking-step-2').style.display = 'none';
+  document.getElementById('booking-step-3').style.display = 'block';
+}
+</script>
+</body>
+</html>

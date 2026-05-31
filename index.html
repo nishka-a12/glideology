@@ -375,6 +375,9 @@ footer{background:var(--navy);padding:3rem 3.5rem;display:flex;justify-content:s
   .logo { font-size: 1.3rem; }
   .nav-links { display: none; }
   #nav-auth-btn { padding: 0.5rem 1rem; font-size: 0.7rem; white-space: nowrap; }
+  #hamburger { display: flex; }
+  #mobile-menu { display: none; }
+  #mobile-menu.open { display: flex; }
 
   /* HERO */
   .hero { grid-template-columns: 1fr; min-height: auto; padding: 2.5rem 1.5rem 3rem; }
@@ -1100,6 +1103,16 @@ footer{background:var(--navy);padding:3rem 3.5rem;display:flex;justify-content:s
 </div>
 
 <nav>
+  <!-- MOBILE MENU OVERLAY -->
+  <div id="mobile-menu" style="position:fixed;inset:0;background:#1E2D4A;z-index:200;flex-direction:column;align-items:center;justify-content:center;gap:2rem;display:none">
+    <button onclick="closeMobileMenu()" style="position:absolute;top:1.5rem;right:1.5rem;background:transparent;border:none;color:white;font-size:1.5rem;cursor:pointer">✕</button>
+    <div style="font-family:'DM Serif Display',serif;font-size:1.5rem;color:white;margin-bottom:1rem">glideology ✦</div>
+    <a onclick="showPage('home');closeMobileMenu()" style="font-size:1.1rem;color:white;text-decoration:none;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;font-family:'Jost',sans-serif">Home</a>
+    <a onclick="showPage('feedback');closeMobileMenu()" style="font-size:1.1rem;color:white;text-decoration:none;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;font-family:'Jost',sans-serif">Feedback</a>
+    <a onclick="showPage('progress');closeMobileMenu()" style="font-size:1.1rem;color:white;text-decoration:none;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;font-family:'Jost',sans-serif">Progress</a>
+    <a onclick="showPage('marketplace');closeMobileMenu()" style="font-size:1.1rem;color:white;text-decoration:none;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;font-family:'Jost',sans-serif">Marketplace</a>
+    <button onclick="document.getElementById('auth-modal').style.display='flex';closeMobileMenu()" style="background:white;color:#1E2D4A;padding:0.8rem 2rem;border-radius:50px;font-size:0.85rem;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;border:none;font-family:'Jost',sans-serif;font-weight:500;margin-top:1rem">Start for Free ♡</button>
+  </div>
   <div class="logo" onclick="showPage('home')">
     <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><ellipse cx="10" cy="7" rx="4.5" ry="6" fill="#F2D8DE" stroke="#C87A8A" stroke-width="1"/><path d="M6.5 12 Q8.5 16 10 17 Q11.5 16 13.5 12" stroke="#C87A8A" stroke-width="1" fill="none" stroke-linecap="round"/><line x1="5" y1="18" x2="15" y2="18" stroke="#1E2D4A" stroke-width="1.5" stroke-linecap="round"/><line x1="6.5" y1="18" x2="5.5" y2="20" stroke="#1E2D4A" stroke-width="1" stroke-linecap="round"/></svg>
     glideology
@@ -1111,6 +1124,11 @@ footer{background:var(--navy);padding:3rem 3.5rem;display:flex;justify-content:s
     <li><a id="nav-marketplace" onclick="showPage('marketplace')">Marketplace</a></li>
   </ul>
   <div style="display:flex;align-items:center;gap:1rem">
+    <button id="hamburger" onclick="document.getElementById('mobile-menu').classList.toggle('open')" style="display:none;background:transparent;border:none;cursor:pointer;flex-direction:column;gap:5px;padding:4px">
+      <span style="display:block;width:22px;height:2px;background:#1E2D4A;border-radius:2px"></span>
+      <span style="display:block;width:22px;height:2px;background:#1E2D4A;border-radius:2px"></span>
+      <span style="display:block;width:22px;height:2px;background:#1E2D4A;border-radius:2px"></span>
+    </button>
     <button id="nav-auth-btn" class="nav-pill" onclick="document.getElementById('auth-modal').style.display='flex'">Start for Free ♡</button>
     <div class="avatar">N</div>
   </div>
@@ -1877,6 +1895,9 @@ footer{background:var(--navy);padding:3rem 3.5rem;display:flex;justify-content:s
 </div>
 
 <script>
+  function closeMobileMenu() {
+  document.getElementById('mobile-menu').classList.remove('open');
+}
 function showPage(id) {
   document.querySelectorAll('.page-view').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-links a').forEach(a => a.classList.remove('active'));

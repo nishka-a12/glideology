@@ -98,8 +98,8 @@
     if (loggedIn && window.loadListings) window.loadListings(db);
   }
 
-  // UPDATE PROGRESS PAGE
-  function updateProgressPage(user, userData) {
+  // UPDATE PROGRESS PAGE — full version with real session data
+  async function updateProgressPage(user, userData) {
     const out = document.getElementById('progress-logged-out');
     const empty = document.getElementById('progress-empty');
     const full = document.getElementById('progress-full');
@@ -112,25 +112,78 @@
     if (out) out.style.display = 'none';
     const name = userData?.name || user.email.split('@')[0];
     const sessions = userData?.sessions || 0;
+    const nameEmptyEl = document.getElementById('prog-name');
+    const emailEl = document.getElementById('prog-email-tag');
+    if (nameEmptyEl) nameEmptyEl.textContent = name;
+    if (emailEl) emailEl.textContent = '✦ ' + user.email;
     if (sessions === 0) {
       if (empty) empty.style.display = 'block';
       if (full) full.style.display = 'none';
-      const nameEl = document.getElementById('prog-name');
-      const emailEl = document.getElementById('prog-email-tag');
-      if (nameEl) nameEl.textContent = name;
-      if (emailEl) emailEl.textContent = '✦ ' + user.email;
-    } else {
-      if (empty) empty.style.display = 'none';
-      if (full) full.style.display = 'block';
-      const nameEl = document.getElementById('prog-name-full');
-      const sessEl = document.getElementById('prog-sessions-tag');
-      const countEl = document.getElementById('prog-count');
-      const levelEl = document.getElementById('prog-level');
-      if (nameEl) nameEl.textContent = name;
-      if (sessEl) sessEl.textContent = '✦ ' + sessions + ' sessions logged';
-      if (countEl) countEl.textContent = sessions;
-      if (levelEl) levelEl.textContent = userData?.level || 'Beginner';
+      return;
     }
+    if (empty) empty.style.display = 'none';
+    if (full) full.style.display = 'block';
+    const set = (id, val) => { const e = document.getElementById(id); if(e) e.textContent = val; };
+    set('prog-name-full', name);
+    set('prog-sessions-tag', '\u2756 ' + sessions + ' sessions logged');
+    set('prog-count', sessions);
+    set('prog-level', userData?.level || 'Beginner');
+    set('prog-joined', userData?.createdAt ? 'Since ' + new Date(userData.createdAt).toLocaleDateString('en-GB',{month:'short',year:'numeric'}) : 'Just joined');
+    try {
+      const { collection, getDocs, orderBy, query, limit } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+      const q = query(collection(db, 'users', user.uid, 'sessions'), orderBy('savedAt', 'desc'), limit(20));
+      const snap = await getDocs(q);
+      const sessionDocs = snap.docs.map(d => d.data());
+      if (sessionDocs.length === 0) return;
+      const scores = sessionDocs.map(s => s.score || 0).filter(s => s > 0);
+      const bestScore = scores.length ? Math.max(...scores) : 0;
+      if (bestScore > 0) { set('prog-best', bestScore); set('prog-best-sub', '\u2191 Personal best \u2756'); }
+      const elements = [...new Set(sessionDocs.map(s => s.element).filter(Boolean))];
+      set('prog-elements', elements.length);
+      set('prog-elements-sub', elements.length ? elements.slice(0,2).join(', ') : '\u2014');
+      const weeks = new Set(sessionDocs.map(s => {
+        const d = new Date(s.savedAt || s.date);
+        const sw = new Date(d); sw.setDate(d.getDate() - d.getDay());
+        return sw.toDateString();
+      }));
+      set('prog-streak', weeks.size);
+      const sessionsList = document.getElementById('prog-sessions-list');
+      if (sessionsList) {
+        const em = {'Axel':'\uD83C\uDF00','Lutz':'\uD83D\uDCAB','Flip':'\u2728','Salchow':'\u2B50','Toe Loop':'\uD83C\uDF38','Layback Spin':'\uD83E\uDE70','Camel Spin':'\uD83D\uDC9D','Footwork':'\uD83C\uDF0A','Spiral':'\uD83E\uDEA9'};
+        sessionsList.innerHTML = sessionDocs.slice(0,5).map(s => {
+          const emoji = Object.entries(em).find(([k]) => (s.element||'').includes(k))?.[1] || '\uD83E\uDE70';
+          const date = s.savedAt ? new Date(s.savedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short'}) : 'Recent';
+          return `<div class="session-item"><span style="font-size:1.1rem">${emoji}</span><div class="session-info"><div class="session-title">${s.element||'Skating session'}</div><div class="session-date">${date}</div></div><div style="text-align:right"><div class="session-score">${s.score||'\u2014'}</div></div></div>`;
+        }).join('');
+      }
+      const masteryList = document.getElementById('prog-mastery-list');
+      if (masteryList && elements.length > 0) {
+        masteryList.innerHTML = elements.slice(0,6).map(el => {
+          const elBest = Math.max(...sessionDocs.filter(s=>s.element===el).map(s=>s.score||0));
+          const pct = elBest || 50;
+          const cc = pct>=80?'mf-gold':pct>=60?'mf-rose':'mf-ice';
+          const bc = pct>=80?'mb-gold':pct>=60?'mb-rose':'mb-ice';
+          const bt = pct>=80?'mastered':pct>=60?'improving':'building';
+          return `<div class="mastery-item"><div class="mastery-top"><span class="mastery-name">${el}</span><div style="display:flex;gap:0.4rem;align-items:center"><span class="mastery-badge ${bc}">${bt}</span><span class="mastery-pct">${pct}%</span></div></div><div class="mastery-track"><div class="mastery-fill ${cc}" style="width:${pct}%"></div></div></div>`;
+        }).join('');
+      }
+      const chartArea = document.getElementById('prog-chart-area');
+      if (chartArea && scores.length >= 2) {
+        const cs = sessionDocs.slice().reverse().map(s=>s.score||0).filter(s=>s>0);
+        const maxS=Math.max(...cs,100),minS=Math.min(...cs,0),w=520,h=160,p=40;
+        const pts=cs.map((s,i)=>`${p+(i/(cs.length-1))*(w-p*2)},${h-p-((s-minS)/(maxS-minS||1))*(h-p*2)}`);
+        const lineD='M'+pts.join(' L');
+        const areaD=lineD+` L${pts[pts.length-1].split(',')[0]},${h-p} L${pts[0].split(',')[0]},${h-p} Z`;
+        chartArea.innerHTML=`<svg width="100%" viewBox="0 0 ${w} ${h}"><path d="${areaD}" fill="rgba(200,122,138,0.08)"/><path d="${lineD}" stroke="#C87A8A" stroke-width="2" fill="none" stroke-linecap="round"/>${pts.map((pt,i)=>`<circle cx="${pt.split(',')[0]}" cy="${pt.split(',')[1]}" r="${i===pts.length-1?6:3.5}" fill="${i===pts.length-1?'white':'#C87A8A'}" stroke="${i===pts.length-1?'#C87A8A':'none'}" stroke-width="2"/>`).join('')}</svg>`;
+        set('prog-chart-sub','your scores over time \u2661');
+      }
+      const goalItems = document.querySelectorAll('.goals-list .goal-item');
+      const tick = (el) => { el.classList.add('done'); el.querySelector('.goal-check').classList.replace('gc-active','gc-done'); el.querySelector('.goal-check').textContent='\u2713'; };
+      if (goalItems[0] && sessions>=1) tick(goalItems[0]);
+      if (goalItems[1] && bestScore>=70) tick(goalItems[1]);
+      if (goalItems[2] && sessions>=5) tick(goalItems[2]);
+      if (goalItems[3] && elements.length>=2) tick(goalItems[3]);
+    } catch(e) { console.error('Progress load error:', e); }
   }
 
   // AUTH STATE LISTENER — fires on every page load

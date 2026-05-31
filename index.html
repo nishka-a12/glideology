@@ -367,6 +367,116 @@ footer{background:var(--navy);padding:3rem 3.5rem;display:flex;justify-content:s
 .flinks a{font-size:0.75rem;color:rgba(255,255,255,0.4);text-decoration:none;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer}
 .flinks a:hover{color:var(--blush-deep)}
 .fmyp{font-size:0.72rem;color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.1);padding:0.4rem 1rem;border-radius:50px;letter-spacing:0.06em}
+/* ===================== MOBILE RESPONSIVE ===================== */
+@media (max-width: 768px) {
+
+  /* NAV */
+  nav { padding: 1rem 1.2rem; gap: 0.8rem; flex-wrap: nowrap; }
+  .logo { font-size: 1.3rem; }
+  .nav-links { display: none; }
+  #nav-auth-btn { padding: 0.5rem 1rem; font-size: 0.7rem; white-space: nowrap; }
+
+  /* HERO */
+  .hero { grid-template-columns: 1fr; min-height: auto; padding: 2.5rem 1.5rem 3rem; }
+  .hero-right { display: none; }
+  h1 { font-size: 2.6rem; }
+  .hero-sub { font-size: 0.9rem; }
+  .hero-actions { flex-direction: column; gap: 0.8rem; }
+  .btn-primary, .btn-outline { width: 100%; text-align: center; }
+  .hero-badge { font-size: 0.65rem; }
+
+  /* BLADE DIVIDER */
+  .blade-divider { gap: 1rem; padding: 1.5rem 1.2rem; justify-content: flex-start; overflow-x: auto; flex-wrap: nowrap; }
+  .blade-divider .item { font-size: 0.7rem; white-space: nowrap; }
+
+  /* SECTIONS */
+  .home-section, section, .elements-section, .features-section,
+  .how-section, .levels-section, .market-section { padding: 3.5rem 1.5rem; }
+  h2 { font-size: 2rem; }
+
+  /* ELEMENTS GRID */
+  .elements-grid { grid-template-columns: repeat(2, 1fr); gap: 0.8rem; }
+
+  /* FEATURES GRID */
+  .fgrid { grid-template-columns: 1fr; gap: 1rem; }
+
+  /* HOW IT WORKS STEPS */
+  .steps { grid-template-columns: 1fr; gap: 1rem; }
+
+  /* LEVELS */
+  .lgrid { grid-template-columns: 1fr; gap: 1rem; }
+
+  /* MARKETPLACE SECTION ON HOME */
+  .minner { grid-template-columns: 1fr; gap: 2rem; }
+  .mgrid { grid-template-columns: 1fr 1fr; }
+
+  /* INNER PAGES */
+  .inner-page { padding: 1.5rem 1.2rem; }
+  .page-h1 { font-size: 1.8rem; }
+
+  /* FEEDBACK PAGE */
+  .results-grid { grid-template-columns: 1fr; gap: 1.5rem; }
+  .feedback-panel { max-height: none; }
+
+  /* PROGRESS PAGE */
+  .profile-hero-bar { grid-template-columns: auto 1fr; gap: 1rem; padding: 1.5rem; }
+  .ph-level { display: none; }
+  .ph-name { font-size: 1.4rem; }
+  .stats-row-4 { grid-template-columns: 1fr 1fr; gap: 0.8rem; }
+  .main-grid-2col { grid-template-columns: 1fr; gap: 1.2rem; }
+  .bottom-grid-2col { grid-template-columns: 1fr; gap: 1.2rem; }
+
+  /* MARKETPLACE PAGE */
+  .market-header-band { flex-direction: column; gap: 1.5rem; padding: 1.8rem 1.5rem; }
+  .mh-stats { gap: 1.5rem; }
+  .search-row { flex-direction: column; gap: 0.8rem; }
+  .search-box { width: 100%; }
+  .filter-row { flex-wrap: wrap; }
+  .listing-grid { grid-template-columns: 1fr; gap: 1rem; }
+  .cat-tabs { overflow-x: auto; flex-wrap: nowrap; gap: 0; }
+  .cat-tab { white-space: nowrap; font-size: 0.7rem; padding: 0.6rem 1rem; }
+
+  /* COACH PROFILE PAGE */
+  .profile-header-card { grid-template-columns: auto 1fr; gap: 1rem; padding: 1.5rem; }
+  .ph-actions-col { display: none; }
+  .stats-strip-4 { grid-template-columns: 1fr 1fr; gap: 0.8rem; }
+  .content-grid-profile { grid-template-columns: 1fr; gap: 1.2rem; }
+  .spec-grid { grid-template-columns: 1fr; }
+  .coach-avatar { width: 70px; height: 70px; font-size: 2rem; }
+  .coach-name { font-size: 1.5rem; }
+
+  /* BOOKING MODAL */
+  #booking-modal > div, #auth-modal > div, #list-modal > div {
+    width: 95%; max-height: 90vh; overflow-y: auto;
+  }
+
+  /* CTA SECTION */
+  .cta-section { padding: 4rem 1.5rem; }
+  .cta-section h2 { font-size: 2rem; }
+
+  /* FOOTER */
+  footer { flex-direction: column; gap: 1.2rem; padding: 2rem 1.5rem; text-align: center; }
+  .flinks { justify-content: center; gap: 1.2rem; }
+
+  /* LOGIN WALL */
+  #market-login-wall { padding: 2rem 1.5rem; }
+  #market-login-wall h2, #market-login-wall [style*="2.4rem"] { font-size: 1.8rem !important; }
+
+  /* PROGRESS LOGGED OUT / EMPTY */
+  #progress-logged-out, #progress-empty { padding: 2rem 1.2rem; }
+
+  /* STAT CARDS */
+  .stat-num-big { font-size: 1.8rem; }
+  .stat-card { padding: 1rem; }
+
+  /* MODALS full width on mobile */
+  #booking-modal, #auth-modal, #list-modal, #booking-step-1,
+  #booking-step-2, #booking-step-3 { padding: 1.5rem !important; }
+
+  /* HIDE DECORATIVE ELEMENTS */
+  .hero-ring, .hero-ring2, .hero-ring3, .rink-art,
+  .cta-ring, .cta-ring2 { display: none; }
+}
 @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
 
 /* ===================== FEEDBACK PAGE ===================== */

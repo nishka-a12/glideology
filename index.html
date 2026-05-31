@@ -1124,7 +1124,7 @@ footer{background:var(--navy);padding:3rem 3.5rem;display:flex;justify-content:s
     <li><a id="nav-marketplace" onclick="showPage('marketplace')">Marketplace</a></li>
   </ul>
   <div style="display:flex;align-items:center;gap:1rem">
-    <button id="hamburger" onclick="document.getElementById('mobile-menu').classList.toggle('open')" style="display:none;background:transparent;border:none;cursor:pointer;flex-direction:column;gap:5px;padding:4px">
+    <button id="hamburger" onclick="openMobileMenu()" style="display:none;background:transparent;border:none;cursor:pointer;flex-direction:column;gap:5px;padding:4px">
       <span style="display:block;width:22px;height:2px;background:#1E2D4A;border-radius:2px"></span>
       <span style="display:block;width:22px;height:2px;background:#1E2D4A;border-radius:2px"></span>
       <span style="display:block;width:22px;height:2px;background:#1E2D4A;border-radius:2px"></span>
@@ -1896,7 +1896,13 @@ footer{background:var(--navy);padding:3rem 3.5rem;display:flex;justify-content:s
 
 <script>
   function closeMobileMenu() {
-  document.getElementById('mobile-menu').classList.remove('open');
+  const m = document.getElementById('mobile-menu');
+  m.style.display = 'none';
+}
+
+function openMobileMenu() {
+  const m = document.getElementById('mobile-menu');
+  m.style.display = 'flex';
 }
 function showPage(id) {
   document.querySelectorAll('.page-view').forEach(p => p.classList.remove('active'));

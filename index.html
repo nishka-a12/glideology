@@ -1782,10 +1782,7 @@ footer{background:var(--navy);padding:3rem 3.5rem;display:flex;justify-content:s
         <div class="section-card">
           <div class="sc-title">What skaters are saying ♡</div>
           <div class="reviews-list">
-            <div class="review-item"><div class="review-top"><div class="reviewer"><div class="rev-avatar">S</div><div><div class="rev-name">Sara M.</div><div class="rev-stars">★★★★★</div></div></div><div class="rev-date">2 weeks ago</div></div><div class="rev-text">Coach Layla is genuinely one of the best coaches I've had. She's so patient and explains everything so clearly — I landed my flip for the first time after just 3 sessions with her ♡</div><span class="rev-tag">Jumps · Intermediate</span></div>
-            <div class="review-item"><div class="review-top"><div class="reviewer"><div class="rev-avatar">A</div><div><div class="rev-name">Aisha K.</div><div class="rev-stars">★★★★★</div></div></div><div class="rev-date">1 month ago</div></div><div class="rev-text">I came in as a complete beginner and Layla made me feel so welcome. Her warm-up routines are really good for building confidence and she always celebrates small wins!</div><span class="rev-tag">Beginner · First lessons</span></div>
-            <div class="review-item"><div class="review-top"><div class="reviewer"><div class="rev-avatar">N</div><div><div class="rev-name">Nour H.</div><div class="rev-stars">★★★★☆</div></div></div><div class="rev-date">2 months ago</div></div><div class="rev-text">Really solid coach — very technical and detailed. My Lutz has improved significantly. Would love if she offered more weekend slots!</div><span class="rev-tag">Competitive · Advanced jumps</span></div>
-          </div>
+           
 
           <!-- LEAVE A REVIEW -->
           <div style="margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid #F2D8DE">
@@ -1860,7 +1857,6 @@ footer{background:var(--navy);padding:3rem 3.5rem;display:flex;justify-content:s
           </div>
 
           <!-- loading state -->
-          <div id="profile-avail-loading" style="font-size:0.82rem;color:#7A8FA8;padding:0.5rem 0">Loading... ♡</div>
         </div>
 
         <!-- PRICE CARD — populated from listing data -->
@@ -1885,6 +1881,14 @@ footer{background:var(--navy);padding:3rem 3.5rem;display:flex;justify-content:s
                 📧 Send Email
               </a>
             </div>
+            <div style="display:flex;align-items:center;gap:1rem;padding:0.9rem 0;border-bottom:1px solid #F2D8DE">
+  <div style="width:38px;height:38px;border-radius:50%;background:#F9EEF0;border:1px solid #E8B8C2;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">📧</div>
+  <div style="flex:1">
+    <div style="font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;color:#7A8FA8;margin-bottom:0.15rem">Glideology Email</div>
+    <div style="font-size:0.85rem;color:#1E2D4A"><a href="mailto:glideology0@gmail.com" style="color:#C87A8A;text-decoration:none">glideology0@gmail.com</a></div>
+  </div>
+  <button onclick="copyText('glideology0@gmail.com', this)" style="background:transparent;border:1px solid #F2D8DE;border-radius:50px;padding:0.25rem 0.7rem;font-size:0.65rem;color:#7A8FA8;cursor:pointer;font-family:'Jost',sans-serif">Copy</button>
+</div>
             <div style="font-size:0.72rem;color:#7A8FA8;text-align:center;line-height:1.6;margin-top:0.3rem" id="quick-contact-note">Contact details below ♡</div>
           </div>
         </div>
@@ -2176,6 +2180,9 @@ function renderListings() {
 function buildListingCard(l) {
   const cat = CAT_CONFIG[l.type] || CAT_CONFIG.other;
   const specs = (l.specialties || '').split(',').slice(0,3).map(s => `<span class="ctag">${s.trim()}</span>`).join('');
+  const isOwner = window._glideologyUser && window._glideologyUser.uid === l.userId;
+  const editBtn = isOwner ? `<button onclick="event.stopPropagation();openEditListing('${l.id}')" style="background:var(--blush);color:var(--rose-dark);border:1px solid var(--blush-deep);border-radius:50px;font-size:0.68rem;padding:0.3rem 0.8rem;cursor:pointer;font-family:'Jost',sans-serif;font-weight:500;letter-spacing:0.06em;text-transform:uppercase">✏️ Edit</button>` : '';
+  const deleteBtn = isOwner ? `<button onclick="event.stopPropagation();deleteListing('${l.id}')" style="background:transparent;color:#E87A7A;border:1px solid #E87A7A;border-radius:50px;font-size:0.68rem;padding:0.3rem 0.8rem;cursor:pointer;font-family:'Jost',sans-serif;letter-spacing:0.06em;text-transform:uppercase">🗑 Delete</button>` : '';
   return `
     <div class="listing-card" onclick="openProfilePage('${l.id}')">
       <div class="card-banner" style="background:${cat.banner}">${cat.emoji}</div>
@@ -2187,10 +2194,14 @@ function buildListingCard(l) {
         <div style="font-size:0.78rem;color:#7A8FA8;margin-bottom:0.8rem;line-height:1.6">${(l.bio||'').substring(0,80)}${(l.bio||'').length > 80 ? '...' : ''}</div>
         <div class="card-footer-row">
           <div class="card-price-big">${l.price || 'Contact for price'}</div>
-          <button class="btn-book" onclick="event.stopPropagation();openProfilePage('${l.id}')">View Profile</button>
+          <div style="display:flex;gap:0.5rem;align-items:center">
+            ${editBtn}${deleteBtn}
+            ${!isOwner ? `<button class="btn-book" onclick="event.stopPropagation();openProfilePage('${l.id}')">View Profile</button>` : ''}
+          </div>
         </div>
       </div>
     </div>`;
+}
 }
 
 function showMarketEmpty() {
@@ -2387,6 +2398,54 @@ window.openProfileWhatsApp = function() {
 }
 
 // Submit listing to Firestore
+window.openEditListing = function(listingId) {
+  const l = _allListings.find(x => x.id === listingId);
+  if (!l) return;
+  window._editingListingId = listingId;
+
+  // Pre-fill the form
+  const set = (id, val) => { const e = document.getElementById(id); if(e) e.value = val || ''; };
+  set('list-name', l.name);
+  set('list-email', l.email);
+  set('list-phone', l.phone);
+  set('list-location', l.location);
+  set('list-type', l.type);
+  set('list-title', l.title);
+  set('list-price', l.price);
+  set('list-iban', l.iban);
+  set('list-bank', l.bank);
+  set('list-bio', l.bio);
+  set('list-specialties', l.specialties);
+  set('list-availability', l.availability);
+  set('list-calendly', l.calendly);
+
+  // Change button text to Update
+  const btn = document.querySelector('#list-form-state button[onclick="submitListing()"]');
+  if (btn) btn.textContent = 'Update Listing ✦';
+
+  // Change title
+  const title = document.querySelector('#list-form-state [style*="1.5rem"]');
+  if (title) title.textContent = 'Edit Your Listing ♡';
+
+  document.getElementById('list-form-state').style.display = 'block';
+  document.getElementById('list-success-state').style.display = 'none';
+  document.getElementById('list-modal').style.display = 'flex';
+}
+
+window.deleteListing = async function(listingId) {
+  if (!confirm('Are you sure you want to delete this listing? ♡')) return;
+  try {
+    const { getFirestore, doc, deleteDoc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+    const db = getFirestore();
+    await deleteDoc(doc(db, 'listings', listingId));
+    _allListings = _allListings.filter(l => l.id !== listingId);
+    renderListings();
+    if (window.showToast) showToast('Listing deleted ♡');
+  } catch(e) {
+    console.error('Delete error:', e);
+    alert('Could not delete — please try again ♡');
+  }
+}
 window.submitListing = async function() {
   const errEl = document.getElementById('list-error');
   errEl.style.display = 'none';
@@ -2428,7 +2487,22 @@ window.submitListing = async function() {
       userId: window._glideologyUser.uid,
       createdAt: new Date().toISOString(),
     };
-    await addDoc(collection(db, 'listings'), listing);
+    if (window._editingListingId) {
+  // UPDATE existing listing
+  const { getFirestore, doc, updateDoc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+  const db2 = getFirestore();
+  await updateDoc(doc(db2, 'listings', window._editingListingId), listing);
+  const idx = _allListings.findIndex(l => l.id === window._editingListingId);
+  if (idx !== -1) _allListings[idx] = { ..._allListings[idx], ...listing };
+  window._editingListingId = null;
+  // Reset button text
+  const btn = document.querySelector('#list-form-state button[onclick="submitListing()"]');
+  if (btn) btn.textContent = 'Go Live on Glideology 🩰';
+} else {
+  // CREATE new listing
+  await addDoc(collection(db, 'listings'), listing);
+  _allListings.unshift({ id: 'new-' + Date.now(), ...listing });
+}
 
     // Add to local array and re-render immediately
     _allListings.unshift({ id: 'new-' + Date.now(), ...listing });

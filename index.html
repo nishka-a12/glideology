@@ -1389,7 +1389,7 @@ footer{background:var(--navy);padding:3rem 3.5rem;display:flex;justify-content:s
         </button>
         <div style="font-size:0.72rem;color:#C0CFDA;margin-top:1rem">or drag & drop your file here</div>
 
-        <input type="file" id="video-file-input" accept="video/*" style="display:none" onchange="handleVideoUpload(this)">
+        <input type="file" id="video-file-input" accept="video/*" style="display:none" >onchange="window.handleVideoUpload(this)"
       </div>
 
       <!-- TIPS ROW -->
@@ -1974,7 +1974,7 @@ function setProgress(pct, msg, emoji) {
   if (emoji && emojiEl) emojiEl.textContent = emoji;
 }
 
-async function handleVideoUpload(input) {
+window.handleVideoUpload = async function(input) {
   const file = input.files[0];
   if (!file) return;
   document.getElementById('feedback-upload-state').style.display = 'none';
@@ -2122,6 +2122,14 @@ let _currentListing = null;
 
 // Called by Firebase onAuthStateChanged when user logs in
 window.loadListings = async function(db) {
+  const loading = document.getElementById('market-loading');
+  const empty = document.getElementById('market-empty');
+  const grid = document.getElementById('listings-grid');
+  if (!db) {
+    if (loading) loading.style.display = 'none';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
   try {
     const { collection, getDocs, orderBy, query } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
     const q = query(collection(db, 'listings'), orderBy('createdAt', 'desc'));

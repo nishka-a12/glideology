@@ -53,6 +53,7 @@ function openMobileMenu() {
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
   const db = getFirestore(app);
+  window._glideologyDb = db;
 
   // SIGN UP
   window.signUp = async function() {
@@ -1389,7 +1390,7 @@ footer{background:var(--navy);padding:3rem 3.5rem;display:flex;justify-content:s
         </button>
         <div style="font-size:0.72rem;color:#C0CFDA;margin-top:1rem">or drag & drop your file here</div>
 
-        <input type="file" id="video-file-input" accept="video/*" style="display:none" >onchange="window.handleVideoUpload(this)"
+        <input type="file" id="video-file-input" accept="video/*" style="display:none" onchange="window.handleVideoUpload(this)">
       </div>
 
       <!-- TIPS ROW -->
@@ -1764,8 +1765,6 @@ footer{background:var(--navy);padding:3rem 3.5rem;display:flex;justify-content:s
       <div class="ss-card"><div class="ss-num" id="profile-stat-price">—</div><div class="ss-label">Starting price</div></div>
       <div class="ss-card"><div class="ss-num" id="profile-stat-type">—</div><div class="ss-label">Service type</div></div>
     </div>
-      <div class="ss-card"><div class="ss-num">AED 180</div><div class="ss-label">Per hour</div></div>
-    </div>
 
     <div class="content-grid-profile">
       <div class="left-col-profile">
@@ -2125,6 +2124,7 @@ window.loadListings = async function(db) {
   const loading = document.getElementById('market-loading');
   const empty = document.getElementById('market-empty');
   const grid = document.getElementById('listings-grid');
+  db = db || window._glideologyDb;
   if (!db) {
     if (loading) loading.style.display = 'none';
     if (empty) empty.style.display = 'block';
@@ -2447,8 +2447,8 @@ window.openEditListing = function(listingId) {
 window.deleteListing = async function(listingId) {
   if (!confirm('Are you sure you want to delete this listing? ♡')) return;
   try {
-    const { getFirestore, doc, deleteDoc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
-    const db = getFirestore();
+    const { doc, deleteDoc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+    const db = window._glideologyDb;
     await deleteDoc(doc(db, 'listings', listingId));
     _allListings = _allListings.filter(l => l.id !== listingId);
     renderListings();
@@ -2480,8 +2480,8 @@ window.submitListing = async function() {
   }
 
   try {
-    const { getFirestore, collection, addDoc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
-    const db = getFirestore();
+    const { collection, addDoc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+    const db = window._glideologyDb;
     const listing = {
       name, email,
       phone: document.getElementById('list-phone')?.value.trim().replace(/\s+/g,'') || '',
@@ -2501,8 +2501,8 @@ window.submitListing = async function() {
     };
     if (window._editingListingId) {
   // UPDATE existing listing
-  const { getFirestore, doc, updateDoc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
-  const db2 = getFirestore();
+  const { doc, updateDoc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+  const db2 = window._glideologyDb;
   await updateDoc(doc(db2, 'listings', window._editingListingId), listing);
   const idx = _allListings.findIndex(l => l.id === window._editingListingId);
   if (idx !== -1) _allListings[idx] = { ..._allListings[idx], ...listing };

@@ -1409,7 +1409,8 @@ footer{background:var(--navy);padding:3rem 3.5rem;display:flex;justify-content:s
           <div class="epill" onclick="selectElement(this)">🩰 Layback Spin</div>
           <div class="epill" onclick="selectElement(this)">💝 Camel Spin</div>
           <div class="epill" onclick="selectElement(this)">🌊 Footwork</div>
-          <div class="epill" onclick="selectElement(this)">🪩 Spiral</div>
+          <div class="epill" onclick="selectElement(this)">🪩 Spiral</div>          
+          <div class="epill" id="combo-pill" onclick="selectElement(this)">🔗 Jump Combo</div>
           <div class="epill other-pill" id="other-pill" onclick="toggleOther(this)">✏️ Other</div>
         </div>
         <style>
@@ -1417,7 +1418,19 @@ footer{background:var(--navy);padding:3rem 3.5rem;display:flex;justify-content:s
         .rot-pill:hover{background:#F9EEF0}
         .rot-pill.rot-on{background:#C87A8A;border-color:#C87A8A;color:white}
       </style>
-      <div id="rotation-wrap" style="display:none;align-items:center;gap:0.6rem;flex-wrap:wrap;margin-top:1rem">
+   <style>
+        .combo-row{display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;margin-bottom:0.6rem}
+        .combo-label{width:6.2rem;font-size:0.8rem;color:#7A8FA8;font-family:'Jost',sans-serif}
+        .combo-sel{padding:0.5rem 0.9rem;border-radius:50px;border:1.5px solid #E8B8C2;background:#FDF8F5;color:#1E2D4A;font-family:'Jost',sans-serif;font-size:0.8rem;outline:none;cursor:pointer}
+      </style>
+      <div id="combo-wrap" style="display:none;margin-top:1rem;background:white;border:1.5px solid #F2D8DE;border-radius:20px;padding:1.2rem 1.4rem">
+        <div style="font-family:'Caveat',cursive;font-size:1.2rem;color:#C87A8A;margin-bottom:0.8rem">build your combo ✦ pick at least 2 jumps</div>
+        <div class="combo-row"><span class="combo-label">Jump 1</span><select id="combo-jump-1" class="combo-sel" onchange="updateComboPreview()"><option value="">choose jump…</option><option>Axel</option><option>Lutz</option><option>Flip</option><option>Loop</option><option>Salchow</option><option>Toe Loop</option><option>Euler</option></select><select id="combo-rot-1" class="combo-sel" onchange="updateComboPreview()"><option value="">rotations</option><option value="1">1 · single</option><option value="2">2 · double</option><option value="3">3 · triple</option><option value="4">4 · quad</option></select></div>
+        <div class="combo-row"><span class="combo-label">Jump 2</span><select id="combo-jump-2" class="combo-sel" onchange="updateComboPreview()"><option value="">choose jump…</option><option>Axel</option><option>Lutz</option><option>Flip</option><option>Loop</option><option>Salchow</option><option>Toe Loop</option><option>Euler</option></select><select id="combo-rot-2" class="combo-sel" onchange="updateComboPreview()"><option value="">rotations</option><option value="1">1 · single</option><option value="2">2 · double</option><option value="3">3 · triple</option><option value="4">4 · quad</option></select></div>
+        <div class="combo-row"><span class="combo-label">Jump 3 (optional)</span><select id="combo-jump-3" class="combo-sel" onchange="updateComboPreview()"><option value="">choose jump…</option><option>Axel</option><option>Lutz</option><option>Flip</option><option>Loop</option><option>Salchow</option><option>Toe Loop</option><option>Euler</option></select><select id="combo-rot-3" class="combo-sel" onchange="updateComboPreview()"><option value="">rotations</option><option value="1">1 · single</option><option value="2">2 · double</option><option value="3">3 · triple</option><option value="4">4 · quad</option></select></div>
+        <div id="combo-preview" style="font-family:'DM Serif Display',serif;font-size:1rem;color:#1E2D4A;margin-top:0.4rem"></div>
+      </div>
+        <div id="rotation-wrap" style="display:none;align-items:center;gap:0.6rem;flex-wrap:wrap;margin-top:1rem">
         <span style="font-family:'Caveat',cursive;font-size:1.2rem;color:#C87A8A">how many rotations? ✦</span>
         <div class="rot-pill" data-rot="1" onclick="selectRotation(this)">1 · single</div>
         <div class="rot-pill" data-rot="2" onclick="selectRotation(this)">2 · double</div>
@@ -2102,6 +2115,7 @@ window.selectRotation = function(btn) {
 function getElementName() {
   const pill = document.querySelector('.epill.selected-rose, .epill.selected');
   if (!pill) return window._detectedElement || 'General';
+    if (pill.id === 'combo-pill') return getComboName() || 'Jump Combo';
   if (pill.id === 'other-pill') {
     const o = document.getElementById('other-input');
     return (o && o.value.trim()) || 'General';
@@ -2134,10 +2148,36 @@ function syncFeedbackHeight() {
   }
 }
 window.addEventListener('resize', syncFeedbackHeight);
+  // ---- JUMP COMBOS ----
+function getComboName() {
+  const parts = [];
+  for (let i = 1; i <= 3; i++) {
+    const j = document.getElementById('combo-jump-' + i);
+    const r = document.getElementById('combo-rot-' + i);
+    if (!j || !j.value) continue;
+    if (j.value === 'Euler') parts.push('Euler');
+    else if (r && r.value) parts.push(ROT_WORDS[r.value] + ' ' + j.value);
+    else parts.push(j.value);
+  }
+  return parts.length >= 2 ? parts.join(' + ') : '';
+}
+
+window.updateComboPreview = function() {
+  const p = document.getElementById('combo-preview');
+  if (p) p.textContent = getComboName();
+};
+
+function updateComboRow() {
+  const pill = document.querySelector('.epill.selected-rose');
+  const wrap = document.getElementById('combo-wrap');
+  if (wrap) wrap.style.display = (pill && pill.id === 'combo-pill') ? 'block' : 'none';
+}
+document.addEventListener('click', () => setTimeout(updateComboRow, 0));
   function elementIsChosen() {
   const pill = document.querySelector('.epill.selected-rose, .epill.selected');
   if (!pill) return false;
   if (pill.id === 'other-pill') return !!document.getElementById('other-input').value.trim();
+      if (pill.id === 'combo-pill') return !!getComboName();
   return true;
 }
 

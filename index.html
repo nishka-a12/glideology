@@ -1362,9 +1362,9 @@ footer{background:var(--navy);padding:3rem 3.5rem;display:flex;justify-content:s
           <div class="epill" onclick="selectElement(this)">🌀 Axel</div>
           <div class="epill" onclick="selectElement(this)">💫 Lutz</div>
           <div class="epill" onclick="selectElement(this)">✨ Flip</div>
-          <div class="epill" onclick="selectElement(this)">➰ Loop</div>
           <div class="epill" onclick="selectElement(this)">⭐ Salchow</div>
           <div class="epill" onclick="selectElement(this)">🌸 Toe Loop</div>
+          <div class="epill" onclick="selectElement(this)">➰ Loop</div>
           <div class="epill" onclick="selectElement(this)">🩰 Layback Spin</div>
           <div class="epill" onclick="selectElement(this)">💝 Camel Spin</div>
           <div class="epill" onclick="selectElement(this)">🌊 Footwork</div>
@@ -1379,7 +1379,7 @@ footer{background:var(--navy);padding:3rem 3.5rem;display:flex;justify-content:s
 
       <!-- UPLOAD BOX -->
       <div id="upload-area"
-       onclick="tryOpenFilePicker()"
+        onclick="tryOpenFilePicker()"
         style="border:2px dashed #E8B8C2;border-radius:24px;background:white;padding:5rem 2rem;text-align:center;cursor:pointer;transition:all 0.2s;margin-top:0.5rem"
         onmouseover="this.style.background='#F9EEF0';this.style.borderColor='#C87A8A'"
         onmouseout="this.style.background='white';this.style.borderColor='#E8B8C2'">
@@ -2025,10 +2025,11 @@ window.tryOpenFilePicker = function() {
   }
   document.getElementById('video-file-input').click();
 };
-  window.handleVideoUpload = async function(input) {
+
+window.handleVideoUpload = async function(input) {
   const file = input.files && input.files[0];
   if (!file) return;
-      if (!elementIsChosen()) {
+  if (!elementIsChosen()) {
     input.value = '';
     if (window.showToast) showToast('Please choose an element first ♡');
     return;
@@ -2046,7 +2047,7 @@ window.tryOpenFilePicker = function() {
   setProgress(5, 'Getting ready... ♡', '🎥');
   const selectedPill = document.querySelector('.epill.selected-rose, .epill.selected');
   const element = selectedPill ? selectedPill.textContent.trim()
-: (document.getElementById('other-input')?.value.trim() || 'not specified - please detect which element is being performed');
+    : (document.getElementById('other-input')?.value.trim() || 'not specified - please detect which element is being performed');
   try {
     stage = 'uploading to Cloudinary';
     setProgress(10, 'Uploading your video to the cloud... ✦', '☁️');
@@ -2142,6 +2143,7 @@ async function saveAndGoToProgress() {
   const filename = titleEl ? titleEl.textContent : 'Session';
   const selectedPill = document.querySelector('.epill.selected-rose, .epill.selected');
   const element = selectedPill ? selectedPill.textContent.trim() : (window._detectedElement || 'General');
+
   if (window._glideologyUser && window.saveSession) {
     await window.saveSession({
       score,

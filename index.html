@@ -2114,7 +2114,27 @@ function getElementName() {
 // show/hide the rotation row whenever anything is clicked (covers picking a pill and resetting)
 document.addEventListener('click', () => setTimeout(updateRotationRow, 0));
 
-function elementIsChosen() {
+function syncFeedbackHeight() {
+  const panel = document.querySelector('.feedback-panel');
+  const left = document.querySelector('.results-grid > div');
+  if (!panel || !left) return;
+  if (window.innerWidth <= 768) {            // phones: stacked, show everything, no inner scrolling
+    panel.style.height = 'auto';
+    panel.style.maxHeight = 'none';
+    panel.style.overflowY = 'visible';
+    return;
+  }
+  const top = left.getBoundingClientRect().top;
+  const bottom = left.lastElementChild.getBoundingClientRect().bottom;
+  const natural = Math.round(bottom - top);
+  if (natural > 0) {
+    panel.style.maxHeight = 'none';
+    panel.style.height = natural + 'px';     // same height as the video column
+    panel.style.overflowY = 'auto';          // scrolls inside if the feedback is longer
+  }
+}
+window.addEventListener('resize', syncFeedbackHeight);
+  function elementIsChosen() {
   const pill = document.querySelector('.epill.selected-rose, .epill.selected');
   if (!pill) return false;
   if (pill.id === 'other-pill') return !!document.getElementById('other-input').value.trim();
@@ -2213,6 +2233,8 @@ function displayFeedback(data, filename) {
   if (scoreLbl) scoreLbl.textContent = 'Overall Technique Score' + (data.detectedElement ? ' · ' + data.detectedElement : '');
   document.getElementById('upload-progress').style.display = 'none';
   document.querySelector('.results-grid').style.display = 'grid';
+    setTimeout(syncFeedbackHeight, 50);
+  setTimeout(syncFeedbackHeight, 600);
   document.querySelector('.score-big').innerHTML = data.overallScore + '<span class="score-suffix">/100</span>';
   const miniBig = document.querySelector('.score-big-mini');
   if (miniBig) miniBig.textContent = data.overallScore;
@@ -2230,8 +2252,10 @@ function displayFeedback(data, filename) {
       const panel = vid.parentElement;
       const ratio = vid.videoWidth / vid.videoHeight;
       if (ratio && panel && panel.parentElement) {
-        const w = Math.min(panel.parentElement.clientWidth, window.innerHeight * 0.75 * ratio);
+               const capH = window.innerHeight * (window.innerWidth <= 768 ? 0.6 : 0.75);
+        const w = Math.min(panel.parentElement.clientWidth, capH * ratio);
         panel.style.width = w + 'px';
+        syncFeedbackHeight();
       }
     };
     vid.src = window._lastBlobUrl;

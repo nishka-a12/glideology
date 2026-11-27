@@ -1379,7 +1379,7 @@ footer{background:var(--navy);padding:3rem 3.5rem;display:flex;justify-content:s
 
       <!-- UPLOAD BOX -->
       <div id="upload-area"
-        onclick="document.getElementById('video-file-input').click()"
+       onclick="tryOpenFilePicker()"
         style="border:2px dashed #E8B8C2;border-radius:24px;background:white;padding:5rem 2rem;text-align:center;cursor:pointer;transition:all 0.2s;margin-top:0.5rem"
         onmouseover="this.style.background='#F9EEF0';this.style.borderColor='#C87A8A'"
         onmouseout="this.style.background='white';this.style.borderColor='#E8B8C2'">
@@ -2008,9 +2008,31 @@ function uploadToCloudinary(file, onProgress) {
   });
 }
 
-window.handleVideoUpload = async function(input) {
+function elementIsChosen() {
+  const pill = document.querySelector('.epill.selected-rose, .epill.selected');
+  if (!pill) return false;
+  if (pill.id === 'other-pill') return !!document.getElementById('other-input').value.trim();
+  return true;
+}
+
+window.tryOpenFilePicker = function() {
+  if (!elementIsChosen()) {
+    if (window.showToast) showToast('Please choose an element first ♡');
+    else alert('Please choose an element first ♡');
+    const sec = document.querySelector('.element-select-section');
+    if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+  document.getElementById('video-file-input').click();
+};
+  window.handleVideoUpload = async function(input) {
   const file = input.files && input.files[0];
   if (!file) return;
+      if (!elementIsChosen()) {
+    input.value = '';
+    if (window.showToast) showToast('Please choose an element first ♡');
+    return;
+  }
   let stage = 'preparing';
   const MAX_MB = 100;
   if (file.size > MAX_MB * 1024 * 1024) {

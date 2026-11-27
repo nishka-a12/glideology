@@ -2023,7 +2023,7 @@ window.handleVideoUpload = async function(input) {
   setProgress(5, 'Getting ready... ♡', '🎥');
   const selectedPill = document.querySelector('.epill.selected-rose, .epill.selected');
   const element = selectedPill ? selectedPill.textContent.trim()
-    : (document.getElementById('other-input')?.value.trim() || 'figure skating');
+: (document.getElementById('other-input')?.value.trim() || 'not specified - please detect which element is being performed');
   try {
     stage = 'uploading to Cloudinary';
     setProgress(10, 'Uploading your video to the cloud... ✦', '☁️');
@@ -2073,6 +2073,9 @@ function showUploadError(stage, err) {
 }
 
 function displayFeedback(data, filename) {
+  window._detectedElement = data.detectedElement || null;
+  const scoreLbl = document.querySelector('.score-label-sm');
+  if (scoreLbl) scoreLbl.textContent = 'Overall Technique Score' + (data.detectedElement ? ' · ' + data.detectedElement : '');
   document.getElementById('upload-progress').style.display = 'none';
   document.querySelector('.results-grid').style.display = 'grid';
   document.querySelector('.score-big').innerHTML = data.overallScore + '<span class="score-suffix">/100</span>';
@@ -2115,8 +2118,7 @@ async function saveAndGoToProgress() {
   const titleEl = document.querySelector('.video-title-label');
   const filename = titleEl ? titleEl.textContent : 'Session';
   const selectedPill = document.querySelector('.epill.selected-rose, .epill.selected');
-  const element = selectedPill ? selectedPill.textContent.trim() : 'General';
-
+  const element = selectedPill ? selectedPill.textContent.trim() : (window._detectedElement || 'General');
   if (window._glideologyUser && window.saveSession) {
     await window.saveSession({
       score,

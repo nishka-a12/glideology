@@ -1409,6 +1409,18 @@ footer{background:var(--navy);padding:3rem 3.5rem;display:flex;justify-content:s
           <div class="epill" onclick="selectElement(this)">🪩 Spiral</div>
           <div class="epill other-pill" id="other-pill" onclick="toggleOther(this)">✏️ Other</div>
         </div>
+        <style>
+        .rot-pill{padding:0.5rem 1.1rem;border-radius:50px;border:1.5px solid #E8B8C2;background:white;color:#1E2D4A;font-family:'Jost',sans-serif;font-size:0.8rem;cursor:pointer;transition:all 0.2s;user-select:none}
+        .rot-pill:hover{background:#F9EEF0}
+        .rot-pill.rot-on{background:#C87A8A;border-color:#C87A8A;color:white}
+      </style>
+      <div id="rotation-wrap" style="display:none;align-items:center;gap:0.6rem;flex-wrap:wrap;margin-top:1rem">
+        <span style="font-family:'Caveat',cursive;font-size:1.2rem;color:#C87A8A">how many rotations? ✦</span>
+        <div class="rot-pill" data-rot="1" onclick="selectRotation(this)">1 · single</div>
+        <div class="rot-pill" data-rot="2" onclick="selectRotation(this)">2 · double</div>
+        <div class="rot-pill" data-rot="3" onclick="selectRotation(this)">3 · triple</div>
+        <div class="rot-pill" data-rot="4" onclick="selectRotation(this)">4 · quad</div>
+      </div>
         <div class="other-input-wrap" id="other-input-wrap">
           <input class="other-input" id="other-input" type="text" placeholder="e.g. Ina Bauer, death spiral, shoot the duck...">
           <span class="other-hint">♡ we'll do our best to help!</span>
@@ -2053,7 +2065,52 @@ window.closeSessionVideo = function() {
   m.style.display = 'none';
 };
 
-function elementIsChosen() {
+const JUMPS = ['Axel', 'Lutz', 'Flip', 'Salchow', 'Toe Loop', 'Loop'];
+const ROT_WORDS = { 1: 'Single', 2: 'Double', 3: 'Triple', 4: 'Quad' };
+window._rotations = null;
+
+function currentJumpName() {
+  const pill = document.querySelector('.epill.selected-rose');
+  if (!pill) return null;
+  const name = pill.textContent.trim().replace(/^[^A-Za-z]+/, '');
+  return JUMPS.includes(name) ? name : null;
+}
+
+function updateRotationRow() {
+  const wrap = document.getElementById('rotation-wrap');
+  if (!wrap) return;
+  const isJump = !!currentJumpName();
+  wrap.style.display = isJump ? 'flex' : 'none';
+  if (!isJump) {
+    window._rotations = null;
+    document.querySelectorAll('.rot-pill').forEach(b => b.classList.remove('rot-on'));
+  }
+}
+
+window.selectRotation = function(btn) {
+  const wasOn = btn.classList.contains('rot-on');
+  document.querySelectorAll('.rot-pill').forEach(b => b.classList.remove('rot-on'));
+  if (wasOn) { window._rotations = null; return; }   // click again to un-pick
+  btn.classList.add('rot-on');
+  window._rotations = Number(btn.getAttribute('data-rot'));
+};
+
+// e.g. "Triple Loop", "Double Axel", or just "Camel Spin"
+function getElementName() {
+  const pill = document.querySelector('.epill.selected-rose, .epill.selected');
+  if (!pill) return window._detectedElement || 'General';
+  if (pill.id === 'other-pill') {
+    const o = document.getElementById('other-input');
+    return (o && o.value.trim()) || 'General';
+  }
+  const name = pill.textContent.trim().replace(/^[^A-Za-z]+/, '');
+  if (JUMPS.includes(name) && window._rotations) return ROT_WORDS[window._rotations] + ' ' + name;
+  return name;
+}
+
+// show/hide the rotation row whenever anything is clicked (covers picking a pill and resetting)
+document.addEventListener('click', () => setTimeout(updateRotationRow, 0));
+  function elementIsChosen() {
   const pill = document.querySelector('.epill.selected-rose, .epill.selected');
   if (!pill) return false;
   if (pill.id === 'other-pill') return !!document.getElementById('other-input').value.trim();
@@ -2091,8 +2148,7 @@ window.handleVideoUpload = async function(input) {
   document.querySelector('.results-grid').style.display = 'none';
   setProgress(5, 'Getting ready... ♡', '🎥');
   const selectedPill = document.querySelector('.epill.selected-rose, .epill.selected');
-  const element = selectedPill ? selectedPill.textContent.trim()
-    : (document.getElementById('other-input')?.value.trim() || 'not specified - please detect which element is being performed');
+  const element = getElementName();
   try {
     stage = 'uploading to Cloudinary';
     setProgress(10, 'Uploading your video to the cloud... ✦', '☁️');
@@ -2204,8 +2260,7 @@ async function saveAndGoToProgress() {
   const titleEl = document.querySelector('.video-title-label');
   const filename = titleEl ? titleEl.textContent : 'Session';
   const selectedPill = document.querySelector('.epill.selected-rose, .epill.selected');
-  const element = selectedPill ? selectedPill.textContent.trim().replace(/^[^A-Za-z]+/, '') : (window._detectedElement || 'General');
-
+  const element = getElementName();
   if (window._glideologyUser && window.saveSession) {
     await window.saveSession({
       score,

@@ -824,7 +824,8 @@ footer{background:var(--navy);padding:3rem 3.5rem;display:flex;justify-content:s
 </div>
 
 <!-- TOAST NOTIFICATION -->
-<div id="auth-success" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#1E2D4A;color:white;padding:1.6rem 2.8rem;border-radius:24px;font-size:1.25rem;line-height:1.5;text-align:center;max-width:90vw;z-index:1001;font-family:'DM Serif Display',serif;box-shadow:0 12px 50px rgba(30,45,74,0.45);border:2px solid #E8B8C2"></div>
+<div id="auth-success" style="display:none;position:fixed;top:1.5rem;right:1.5rem;background:#1E2D4A;color:white;padding:0.8rem 1.5rem;border-radius:50px;font-size:0.82rem;z-index:1001;font-family:'Jost',sans-serif;box-shadow:0 4px 20px rgba(30,45,74,0.3)"></div>
+
 <!-- LIST YOUR SERVICES MODAL -->
 <div id="list-modal" style="display:none;position:fixed;inset:0;background:rgba(30,45,74,0.6);z-index:999;align-items:center;justify-content:center;padding:1rem">
   <div style="background:#FDF8F5;border-radius:24px;width:90%;max-width:480px;position:relative;max-height:90vh;overflow-y:auto">
@@ -1445,7 +1446,6 @@ footer{background:var(--navy);padding:3rem 3.5rem;display:flex;justify-content:s
     <div class="results-grid" style="display:none">
       <div>
         <div class="video-panel">
-                <div class="video-panel">
           <video id="result-video" controls playsinline preload="metadata" style="width:100%;height:100%;object-fit:contain;background:#1E2D4A;display:block"></video>
         </div>
         <div class="video-title-label" style="color:#1E2D4A;font-size:0.85rem;margin:0.6rem 0 1rem;text-align:center;opacity:0.7;font-family:'Jost',sans-serif">your_video.mp4</div>
@@ -2014,7 +2014,8 @@ window.closeSessionVideo = function() {
   v.pause(); v.removeAttribute('src'); v.load();
   m.style.display = 'none';
 };
-  function elementIsChosen() {
+
+function elementIsChosen() {
   const pill = document.querySelector('.epill.selected-rose, .epill.selected');
   if (!pill) return false;
   if (pill.id === 'other-pill') return !!document.getElementById('other-input').value.trim();
@@ -2061,11 +2062,12 @@ window.handleVideoUpload = async function(input) {
       setProgress(10 + Math.round(pct * 0.5), 'Uploading your video to the cloud... ✦', '☁️');
     });
 
-        window._lastVideoFile = file;
+    window._lastVideoFile = file;
     window._lastVideoUrl = cloudData.secure_url;
     window._lastVideoPoster = cloudData.secure_url
       .replace('/upload/', '/upload/so_0,w_900,c_limit/')
       .replace(/\.[a-zA-Z0-9]+(\?.*)?$/, '.jpg');
+
     stage = 'AI analysis (Cloudflare Worker)';
     setProgress(65, 'AI is watching your skating... ♡', '🤖');
     const aiRes = await fetch(AI_WORKER_URL, {
@@ -2123,10 +2125,12 @@ function displayFeedback(data, filename) {
     if (window._lastBlobUrl) URL.revokeObjectURL(window._lastBlobUrl);
     window._lastBlobUrl = URL.createObjectURL(window._lastVideoFile);
     vid.poster = window._lastVideoPoster || '';
+    // jump to the very first frame so it shows as the thumbnail
     vid.onloadedmetadata = () => { try { vid.currentTime = 0.1; } catch (e) {} };
     vid.src = window._lastBlobUrl;
     vid.load();
-  }  const bars = document.querySelectorAll('.bar-fill');
+  }
+  const bars = document.querySelectorAll('.bar-fill');
   const barVals = document.querySelectorAll('.bar-val');
   const barNames = document.querySelectorAll('.bar-name');
   if (data.scores && typeof data.scores === 'object') {
@@ -2169,8 +2173,9 @@ async function saveAndGoToProgress() {
       score,
       element,
       filename,
-videoUrl: window._lastVideoUrl || null,
-      date: new Date().toISOString()    });
+      videoUrl: window._lastVideoUrl || null,
+      date: new Date().toISOString()
+    });
   } else if (!window._glideologyUser) {
     document.getElementById('auth-modal').style.display = 'flex';
     return;
@@ -2178,9 +2183,9 @@ videoUrl: window._lastVideoUrl || null,
   showPage('progress');
 }
 function resetFeedback() {
-    const rv = document.getElementById('result-video');
-  if (rv) { rv.pause(); rv.removeAttribute('src'); rv.load(); }
   document.getElementById('feedback-upload-state').style.display = 'block';
+  const rv = document.getElementById('result-video');
+  if (rv) { rv.pause(); rv.removeAttribute('src'); rv.load(); }
   document.getElementById('upload-progress').style.display = 'none';
   document.querySelector('.results-grid').style.display = 'none';
   setProgress(0, 'Uploading your video... ♡', '🎥');
@@ -2826,7 +2831,7 @@ function confirmBooking() {
   document.getElementById('booking-step-3').style.display = 'block';
 }
 </script>
-  <div id="video-modal" style="display:none;position:fixed;inset:0;background:rgba(30,45,74,0.85);z-index:2000;align-items:center;justify-content:center;padding:1.5rem" onclick="closeSessionVideo()">
+<div id="video-modal" style="display:none;position:fixed;inset:0;background:rgba(30,45,74,0.85);z-index:2000;align-items:center;justify-content:center;padding:1.5rem" onclick="closeSessionVideo()">
   <div style="position:relative;max-width:900px;width:100%" onclick="event.stopPropagation()">
     <button onclick="closeSessionVideo()" style="position:absolute;top:-2.8rem;right:0;background:none;border:none;color:white;font-size:1.8rem;cursor:pointer">✕</button>
     <video id="modal-video" controls playsinline preload="metadata" style="width:100%;max-height:80vh;border-radius:16px;background:#1E2D4A"></video>

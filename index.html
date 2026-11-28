@@ -1469,6 +1469,9 @@ footer{background:var(--navy);padding:3rem 3.5rem;display:flex;justify-content:s
         </div>
       </div>
 
+     <div style="font-size:0.75rem;color:#7A8FA8;line-height:1.6;margin:1rem 0 0.2rem;padding:0.8rem 1rem;background:#F9EEF0;border-radius:14px">
+        🔒 Your video is stored securely to give you feedback and track your progress, and is only used for that. Please only upload videos you have permission to share (if you're under 18, ask a parent or guardian first) ♡
+      </div>
       <!-- UPLOAD BOX -->
       <div id="upload-area"
         onclick="tryOpenFilePicker()"
@@ -2207,6 +2210,10 @@ document.addEventListener('click', () => setTimeout(updateComboRow, 0));
 }
 
 window.tryOpenFilePicker = function() {
+    if (!window._glideologyUser) {
+    if (window.showToast) showToast('Please sign in first ♡');
+    return;
+  }
   if (!elementIsChosen()) {
     if (window.showToast) showToast('Please choose an element first ♡');
     else alert('Please choose an element first ♡');
@@ -2253,9 +2260,12 @@ window.handleVideoUpload = async function(input) {
 
     stage = 'AI analysis (Cloudflare Worker)';
     setProgress(65, 'AI is watching your skating... ♡', '🤖');
+      const user = window._glideologyUser;
+    if (!user) throw new Error('Please sign in first ♡');
+    const idToken = await user.getIdToken();
     const aiRes = await fetch(AI_WORKER_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
       body: JSON.stringify({ videoUrl: cloudData.secure_url, element })
     });
     if (!aiRes.ok) {

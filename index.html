@@ -190,6 +190,32 @@ function openMobileMenu() {
     const current = lastWeekWithSession >= thisWeek - 1 ? run : 0;
     return { current, best };
   }
+   // ---- BADGES ----
+  const BADGES = [
+    { icon: '🎀', name: 'First glide',  how: 'Save your first session', test: (best, n) => n >= 1 },
+    { icon: '✦',  name: 'Two in a row', how: '2-week streak',           test: (best) => best >= 2 },
+    { icon: '🔥', name: 'On a roll',    how: '4-week streak',           test: (best) => best >= 4 },
+    { icon: '💎', name: 'Dedicated',    how: '8-week streak',           test: (best) => best >= 8 },
+    { icon: '👑', name: 'Ice royalty',  how: '12-week streak',          test: (best) => best >= 12 }
+  ];
+  function badgesHtml(best, sessionCount) {
+    const items = BADGES.map(b => {
+      const on = b.test(best, sessionCount);
+      return '<div title="' + b.how + '" style="text-align:center;flex:1 1 90px;min-width:80px;opacity:' + (on ? 1 : 0.4) + ';filter:' + (on ? 'none' : 'grayscale(1)') + '">' +
+        '<div style="width:58px;height:58px;margin:0 auto 0.5rem;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.6rem;background:' + (on ? '#F9EEF0' : '#F1F1F1') + ';border:2px solid ' + (on ? '#E8B8C2' : '#E0E0E0') + '">' + b.icon + '</div>' +
+        '<div style="font-family:\'DM Serif Display\',serif;font-size:0.85rem;color:#1E2D4A">' + b.name + '</div>' +
+        '<div style="font-size:0.68rem;color:#7A8FA8;line-height:1.4">' + b.how + '</div></div>';
+    }).join('');
+    const next = BADGES.find(b => !b.test(best, sessionCount));
+    const hint = next ? 'Next up: ' + next.name + ' (' + next.how + ')' : 'You have every badge, ice royalty ♡';
+    return '<div class="card-title-serif" style="margin-bottom:0.2rem">Your badges</div>' +
+      '<div class="card-script-sm" style="margin-bottom:1.2rem">' + hint + '</div>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:1rem">' + items + '</div>';
+  }
+  function renderBadges(best, sessionCount) {
+    const box = document.getElementById('prog-badges');
+    if (box) box.innerHTML = badgesHtml(best, sessionCount);
+  }
   // UPDATE PROGRESS PAGE — full version with real session data
   async function updateProgressPage(user, userData) {
     const out = document.getElementById('progress-logged-out');
@@ -247,6 +273,7 @@ function openMobileMenu() {
       const st = computeStreaks(streakDates.filter(d => !isNaN(d)));
       set('prog-streak', st.current);
       set('prog-streak-best', 'Personal best: ' + st.best + (st.best === 1 ? ' week' : ' weeks') + ' ✦');      const sessionsList = document.getElementById('prog-sessions-list');
+            renderBadges(st.best, streakDates.length);
       if (sessionsList) {
         const em = {'Axel':'\uD83C\uDF00','Lutz':'\uD83D\uDCAB','Flip':'\u2728','Salchow':'\u2B50','Toe Loop':'\uD83C\uDF38','Layback Spin':'\uD83E\uDE70','Camel Spin':'\uD83D\uDC9D','Footwork':'\uD83C\uDF0A','Spiral':'\uD83E\uDEA9'};
         sessionsList.innerHTML = sessionDocs.slice(0,5).map(s => {
@@ -1662,6 +1689,7 @@ footer{background:var(--navy);padding:3rem 3.5rem;display:flex;justify-content:s
         <div class="stat-card"><span class="stat-icon-big">✨</span><div class="stat-num-big" id="prog-elements">0</div><div class="stat-label-sm">Elements tracked</div><div class="stat-delta" id="prog-elements-sub">—</div></div>
         <div class="stat-card"><span class="stat-icon-big">🔥</span><div class="stat-num-big" id="prog-streak">0</div><div class="stat-label-sm">Week streak</div><div class="stat-delta" id="prog-streak-best">Personal best: — ✦</div></div>      </div>
 
+            <div id="prog-badges" class="section-card" style="margin-bottom:2rem"></div>
       <div class="main-grid-2col">
         <div class="chart-card">
           <div class="card-header-row">

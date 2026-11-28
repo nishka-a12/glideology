@@ -2371,7 +2371,7 @@ function buildPlanHtml(plan) {
   return '<div class="fc-top"><div class="fc-type"><div class="fc-dot dot-green"></div><div class="fc-element">Your practice plan ✦</div></div></div>' +
     plan.map((d, i) =>
       '<div style="padding:0.7rem 0;' + (i ? 'border-top:1px solid #F2D8DE;' : '') + '">' +
-        '<div style="display:flex;justify-content:space-between;gap:0.8rem;align-items:baseline">' +
+        '<div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:0.3rem 0.8rem;align-items:baseline">' +
           '<div style="font-family:\'DM Serif Display\',serif;font-size:0.95rem;color:#1E2D4A">' + (i + 1) + '. ' + escHtml(d.title) + '</div>' +
           '<div style="font-size:0.66rem;letter-spacing:0.06em;text-transform:uppercase;color:#C87A8A;text-align:right">' + escHtml(d.where) + (d.time ? ' · ' + escHtml(d.time) : '') + '</div>' +
         '</div>' +

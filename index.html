@@ -171,6 +171,25 @@ function openMobileMenu() {
     if (loggedIn && window.loadListings) window.loadListings(db);
   }
 
+   // ---- WEEK STREAKS ----
+  // A week runs Sunday to Saturday. The streak counts back-to-back weeks with at least one session.
+  function weekIndex(dt) {
+    const days = Math.floor(Date.UTC(dt.getFullYear(), dt.getMonth(), dt.getDate()) / 86400000);
+    return Math.floor((days + 3) / 7);  }
+  function computeStreaks(dates, now) {
+    const weeks = [...new Set(dates.map(weekIndex))].sort((a, b) => a - b);
+    if (!weeks.length) return { current: 0, best: 0 };
+    let best = 1, run = 1;
+    for (let i = 1; i < weeks.length; i++) {
+      run = (weeks[i] === weeks[i - 1] + 1) ? run + 1 : 1;
+      if (run > best) best = run;
+    }
+    const thisWeek = weekIndex(now || new Date());
+    const lastWeekWithSession = weeks[weeks.length - 1];
+    // still alive if you skated this week or last week; a fully missed week resets it to 0
+    const current = lastWeekWithSession >= thisWeek - 1 ? run : 0;
+    return { current, best };
+  }
   // UPDATE PROGRESS PAGE — full version with real session data
   async function updateProgressPage(user, userData) {
     const out = document.getElementById('progress-logged-out');
@@ -219,8 +238,15 @@ function openMobileMenu() {
         const sw = new Date(d); sw.setDate(d.getDate() - d.getDay());
         return sw.toDateString();
       }));
-      set('prog-streak', weeks.size);
-      const sessionsList = document.getElementById('prog-sessions-list');
+// real streak: back-to-back weeks with a session; resets if a whole week is missed
+      let streakDates = sessionDocs.map(s => new Date(s.savedAt || s.date));
+      try {
+        const allSnap = await getDocs(query(collection(db, 'users', user.uid, 'sessions'), orderBy('savedAt', 'desc'), limit(1000)));
+        streakDates = allSnap.docs.map(d => { const x = d.data(); return new Date(x.savedAt || x.date); });
+      } catch (e) { console.warn('streak query:', e); }
+      const st = computeStreaks(streakDates.filter(d => !isNaN(d)));
+      set('prog-streak', st.current);
+      set('prog-streak-best', 'Personal best: ' + st.best + (st.best === 1 ? ' week' : ' weeks') + ' ✦');      const sessionsList = document.getElementById('prog-sessions-list');
       if (sessionsList) {
         const em = {'Axel':'\uD83C\uDF00','Lutz':'\uD83D\uDCAB','Flip':'\u2728','Salchow':'\u2B50','Toe Loop':'\uD83C\uDF38','Layback Spin':'\uD83E\uDE70','Camel Spin':'\uD83D\uDC9D','Footwork':'\uD83C\uDF0A','Spiral':'\uD83E\uDEA9'};
         sessionsList.innerHTML = sessionDocs.slice(0,5).map(s => {
@@ -1631,8 +1657,7 @@ footer{background:var(--navy);padding:3rem 3.5rem;display:flex;justify-content:s
         <div class="stat-card highlight"><span class="stat-icon-big">📈</span><div class="stat-num-big" id="prog-best">—</div><div class="stat-label-sm">Best score ever</div><div class="stat-delta" id="prog-best-sub">Upload a video to start ♡</div></div>
         <div class="stat-card"><span class="stat-icon-big">🎥</span><div class="stat-num-big" id="prog-count">0</div><div class="stat-label-sm">Sessions logged</div><div class="stat-delta">Keep going! ✦</div></div>
         <div class="stat-card"><span class="stat-icon-big">✨</span><div class="stat-num-big" id="prog-elements">0</div><div class="stat-label-sm">Elements tracked</div><div class="stat-delta" id="prog-elements-sub">—</div></div>
-        <div class="stat-card"><span class="stat-icon-big">🔥</span><div class="stat-num-big" id="prog-streak">0</div><div class="stat-label-sm">Week streak</div><div class="stat-delta">Keep it up! ♡</div></div>
-      </div>
+        <div class="stat-card"><span class="stat-icon-big">🔥</span><div class="stat-num-big" id="prog-streak">0</div><div class="stat-label-sm">Week streak</div><div class="stat-delta" id="prog-streak-best">Personal best: — ✦</div></div>      </div>
 
       <div class="main-grid-2col">
         <div class="chart-card">

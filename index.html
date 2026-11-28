@@ -2302,8 +2302,92 @@ function showUploadError(stage, err) {
   }
 }
 
-function displayFeedback(data, filename) {
+// ---- COMPARISON + PRACTICE PLAN ----
+function escHtml(t) {
+  return String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+function buildComparisonHtml(past, nowScore, scores, element) {
+  const head = (txt) => '<div class="fc-top"><div class="fc-type"><div class="fc-dot dot-green"></div><div class="fc-element">' + txt + '</div></div></div>';
+  if (!past.length) {
+    return head('First time on ' + escHtml(element) + ' ✦') +
+      '<div class="fc-body-text">Save this session and next time you will see how you have improved ♡</div>';
+  }
+  const last = past[0];
+  const best = Math.max(...past.map(s => s.score));
+  const diff = nowScore - last.score;
+  const arrow = diff > 0 ? '▲' : diff < 0 ? '▼' : '＝';
+  const color = diff > 0 ? '#3E8E66' : diff < 0 ? '#C0504D' : '#7A8FA8';
+  const lastDate = new Date(last.savedAt || last.date);
+  const dateTxt = isNaN(lastDate) ? 'last time' : lastDate.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  let rows = '';
+  if (last.scores && scores) {
+    rows = Object.entries(scores)
+      .filter(([k]) => typeof last.scores[k] === 'number')
+      .map(([k, v]) => {
+        const d = v - last.scores[k];
+        const c = d > 0 ? '#3E8E66' : d < 0 ? '#C0504D' : '#7A8FA8';
+        const dt = d > 0 ? '▲ +' + d : d < 0 ? '▼ ' + d : '＝';
+        return '<div style="display:flex;justify-content:space-between;gap:1rem;font-size:0.78rem;padding:0.25rem 0;color:#1E2D4A"><span>' + escHtml(k) + '</span><span>' + last.scores[k] + ' → ' + v + ' <b style="color:' + c + '">' + dt + '</b></span></div>';
+      }).join('');
+  }
+  const newBest = nowScore > best;
+  return head('Compared to last time ✦') +
+    '<div class="fc-body-text"><b style="color:' + color + ';font-size:1.1rem">' + arrow + ' ' + (diff > 0 ? '+' : '') + diff + '</b> vs your ' + escHtml(element) + ' on ' + dateTxt + ' (' + last.score + ' → ' + nowScore + '). ' +
+    (newBest ? '🎉 That is a new personal best for this element!' : 'Personal best for this element: ' + best + '.') + '</div>' +
+    (rows ? '<div style="margin-top:0.6rem">' + rows + '</div>' : '') +
+    '<div class="fc-tip" style="margin-top:0.8rem"><span>♡</span><span>AI scores are estimates from still frames, so look for the trend over several sessions rather than any single number.</span></div>';
+}
+
+function buildPlanHtml(plan) {
+  return '<div class="fc-top"><div class="fc-type"><div class="fc-dot dot-green"></div><div class="fc-element">Your practice plan ✦</div></div></div>' +
+    plan.map((d, i) =>
+      '<div style="padding:0.7rem 0;' + (i ? 'border-top:1px solid #F2D8DE;' : '') + '">' +
+        '<div style="display:flex;justify-content:space-between;gap:0.8rem;align-items:baseline">' +
+          '<div style="font-family:\'DM Serif Display\',serif;font-size:0.95rem;color:#1E2D4A">' + (i + 1) + '. ' + escHtml(d.title) + '</div>' +
+          '<div style="font-size:0.66rem;letter-spacing:0.06em;text-transform:uppercase;color:#C87A8A;text-align:right">' + escHtml(d.where) + (d.time ? ' · ' + escHtml(d.time) : '') + '</div>' +
+        '</div>' +
+        '<div class="fc-body-text" style="margin-top:0.3rem">' + escHtml(d.steps) + '</div>' +
+      '</div>'
+    ).join('');
+}
+
+function renderPracticePlan(data) {
+  const panel = document.querySelector('.feedback-panel');
+  const safety = document.querySelector('.safety-card');
+  if (!panel || !safety) return;
+  panel.querySelectorAll('.plan-card').forEach(c => c.remove());
+  const plan = Array.isArray(data.practicePlan) ? data.practicePlan.slice(0, 3) : [];
+  if (!plan.length) return;
+  const card = document.createElement('div');
+  card.className = 'feedback-card plan-card';
+  card.innerHTML = buildPlanHtml(plan);
+  safety.insertAdjacentElement('beforebegin', card);
+  syncFeedbackHeight();
+}
+
+async function renderComparison(data) {
+  const user = window._glideologyUser, db = window._glideologyDb;
+  const scoreCard = document.querySelector('.score-card');
+  const panel = document.querySelector('.feedback-panel');
+  if (!user || !db || !scoreCard || !panel) return;
+  const element = getElementName();
+  let past = [];
+  try {
+    const { collection, getDocs, query, orderBy, limit } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+    const snap = await getDocs(query(collection(db, 'users', user.uid, 'sessions'), orderBy('savedAt', 'desc'), limit(100)));
+    past = snap.docs.map(d => d.data()).filter(s => s.element === element && typeof s.score === 'number');
+  } catch (e) { console.warn('comparison query:', e); return; }
+  panel.querySelectorAll('.compare-card').forEach(c => c.remove());
+  const card = document.createElement('div');
+  card.className = 'feedback-card compare-card';
+  card.innerHTML = buildComparisonHtml(past, Number(data.overallScore), data.scores, element);
+  scoreCard.insertAdjacentElement('afterend', card);
+  syncFeedbackHeight();
+}
+  function displayFeedback(data, filename) {
   window._detectedElement = data.detectedElement || null;
+    window._lastFeedback = data;
   const scoreLbl = document.querySelector('.score-label-sm');
   if (scoreLbl) scoreLbl.textContent = 'Overall Technique Score' + (data.detectedElement ? ' · ' + data.detectedElement : '');
   document.getElementById('upload-progress').style.display = 'none';
@@ -2364,6 +2448,8 @@ function displayFeedback(data, filename) {
   const goodEl = document.getElementById('good-count');
   if (fixEl) fixEl.textContent = fixCount;
   if (goodEl) goodEl.textContent = goodCount;
+    renderPracticePlan(data);
+  renderComparison(data);
 }
 
 async function saveAndGoToProgress() {
@@ -2380,6 +2466,7 @@ async function saveAndGoToProgress() {
       element,
       filename,
       videoUrl: window._lastVideoUrl || null,
+            scores: (window._lastFeedback && window._lastFeedback.scores) || null,
       date: new Date().toISOString()
     });
   } else if (!window._glideologyUser) {
